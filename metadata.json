@@ -1,0 +1,6 @@
+{
+  "name": "Admissão Cirúrgica",
+  "description": "Aplicativo para admissão de enfermagem de pacientes cirúrgicos com escalas clínicas e sumário copiável.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
