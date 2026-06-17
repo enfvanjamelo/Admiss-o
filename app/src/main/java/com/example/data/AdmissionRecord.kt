@@ -21,6 +21,13 @@ data class AdmissionRecord(
     val leito: String = "",
     val tipoCirurgia: String = "",
     
+    // Sinais Vitais (Vitals)
+    val pressaoArterial: String = "",
+    val frequenciaCardiaca: String = "",
+    val frequenciaRespiratoria: String = "",
+    val temperatura: String = "",
+    val saturacaoO2: String = "",
+    
     // 2. Sistemas Orgânicos & Dispositivos
     val sistemaLocomotor: String = "",
     val sistemaCardiovascular: String = "",
@@ -210,114 +217,173 @@ data class AdmissionRecord(
         
         val lesions = getLesionsList()
         val lesionsTable = if (lesions.isNotEmpty()) {
-            val sb = java.lang.StringBuilder("\n6. REGISTRO & PLANILHA DE LESÕES DE PELE\n--------------------------------------------------\n")
-            sb.append(String.format("%-10s | %-12s | %-12s | %-11s | %-10s\n", "Data", "Região", "Tipo Lesão", "Dimensões", "Tecido"))
-            sb.append("--------------------------------------------------\n")
+            val sb = java.lang.StringBuilder("\nVI. MONITORAMENTO E PLANILHA DE LESÕES CUTÂNEAS\n--------------------------------------------------------------------------------\n")
+            sb.append(String.format("%-11s | %-15s | %-15s | %-12s | %-15s\n", "Data Reg.", "Localização", "Tipo de Lesão", "Área/Dimens.", "Padrão Tecidual"))
+            sb.append("--------------------------------------------------------------------------------\n")
             for (l in lesions) {
                 val dims = "${l.larguraCm}x${l.comprimentoCm} cm"
-                sb.append(String.format("%-10s | %-12s | %-12s | %-11s | %-10s\n", 
-                    l.dataRegistro.take(10), 
-                    l.localizacao.take(12), 
-                    l.tipoLesao.take(12), 
-                    dims.take(11), 
-                    l.tipoTecido.take(10)
+                val areaStr = if (l.areaCm2.isNotBlank()) "(${l.areaCm2} cm²)" else ""
+                val dimFull = "$dims $areaStr"
+                sb.append(String.format("%-11s | %-15s | %-15s | %-12s | %-15s\n", 
+                    l.dataRegistro.take(11), 
+                    l.localizacao.take(15), 
+                    l.tipoLesao.take(15), 
+                    dimFull.take(12), 
+                    l.tipoTecido.take(15)
                 ))
             }
-            sb.append("--------------------------------------------------\n")
+            sb.append("--------------------------------------------------------------------------------\n")
             sb.toString()
         } else ""
 
+        // Helper technical mappings for blank fields in organ systems
+        val loc = if (sistemaLocomotor.isBlank()) "Deambulação ativa, sem déficits motores ou limitações de amplitude nas articulações (eumotricidade). Marcha de padrão estável, força muscular preservada globalmente." else sistemaLocomotor
+        val cv = if (sistemaCardiovascular.isBlank()) "Bulhas rítmicas e normofonéticas em dois tempos (BRNF2T), ausência de sopros ou ruídos extras. Hemodinamicamente estável, perfusão periférica adequada (TEC < 2s). Eufígmico." else sistemaCardiovascular
+        val resp = if (sistemaRespiratorio.isBlank()) "Eupneico em ar ambiente (AA). Expansibilidade torácica mantida de forma simétrica; murmúrio vesicular universalmente audível (MVUA) sem ruídos adventícios." else sistemaRespiratorio
+        val neur = if (sistemaNeurologico.isBlank()) "Consciente, orientado no tempo e espaço (COTE). Escala de Glasgow = 15. Pupilas isocóricas e fotorreagentes (MIFR). Ausência de déficits neurológicos focais apparentes." else sistemaNeurologico
+        val nutr = if (sistemaNutricao.isBlank()) "Eutrófico, mucosa oral corada, íntegra e hidratada. Ingestão dietética líquida/sólida por via oral (VO) preservada, sem queixas de disfagia ou sialorreia." else sistemaNutricao
+        val urin = if (sistemaUrinario.isBlank()) "Fisiologia geniturinária preservada. Eliminações vesicais presentes, diurese espontânea de coloração amarelada e aspecto límpido, sem relatos de disúria ou polaciúria." else sistemaUrinario
+        val intest = if (sistemaIntestinal.isBlank()) "Abdômen plano, flácido, indolor à palpação superficial e profunda. Ruídos hidroaéreos (RHA) presentes nos quatro quadrantes. Eliminações intestinais presentes." else sistemaIntestinal
+        val integ = if (sistemaIntegridadePele.isBlank()) "Tegumento íntegro, turgor cutâneo e elasticidade preservados. Ausência de lesões elementares, hematomas, equimoses ou sinais flogísticos na admissão hospitalar." else sistemaIntegridadePele
+        val disp = if (dispositivos.isBlank()) "Livre de acessos venosos invasivos, cateterizações ou sondagens (ausência de SVD, SNE ou drenos ativos no momento da admissão)." else dispositivos
+
         return """
-            ==================================================
-              ADMISSÃO DE ENFERMAGEM - PACIENTE CIRÚRGICO
-            ==================================================
+            ================================================================================
+                     PARECER DE ENFERMAGEM ADMISSIONAL - PACIENTE CIRÚRGICO (SAE)
+            ================================================================================
+            REGISTRO DE SISTEMATIZAÇÃO DA ASSISTÊNCIA DE ENFERMAGEM | DATA/HORA: $dataFormatada
 
-            1. DADOS DE IDENTIFICAÇÃO DO PACIENTE
-            --------------------------------------------------
-            Nome: ${nome.ifBlank { "Não informado" }}
-            Idade: ${idade.ifBlank { "Não informada" }} anos | Sexo: ${sexo.ifBlank { "Não informado" }}
-            Religião: ${religiao.ifBlank { "Não informada" }} | Estado Civil: ${estadoCivil.ifBlank { "Não informado" }}
-            Função Laboral: ${funcaoLaboral.ifBlank { "Não informada" }}
-            Proveniência: ${proveniencia.ifBlank { "Não informada" }}
-            Prontuário: ${prontuario.ifBlank { "Não informado" }}
-            Enfermaria: ${enfermaria.ifBlank { "Não informada" }} | Leito: ${leito.ifBlank { "Não informado" }}
-            Tipo de Cirurgia Planejada: ${tipoCirurgia.ifBlank { "Não informado" }}
+            I. IDENTIFICAÇÃO E DADOS CLÍNICOS DO PACIENTE
+            --------------------------------------------------------------------------------
+            • Paciente: ${nome.ifBlank { "Não especificado" }}
+            • Faixa Etária/Idade: ${idade.ifBlank { "Não informada" }} anos | Gênero: ${sexo.ifBlank { "Não informado" }}
+            • Crença Religiosa: ${religiao.ifBlank { "Não referida" }} | Status Civil: ${estadoCivil.ifBlank { "Não informado" }}
+            • Atividade Laboral: ${funcaoLaboral.ifBlank { "Não cadastrada" }}
+            • Proveniência Clínica: ${proveniencia.ifBlank { "Não informada" }}
+            • Prontuário Clínico: nº ${prontuario.ifBlank { "Não especificado" }}
+            • Localização Hospitalar: Enfermaria: ${enfermaria.ifBlank { "N/A" }} | Leito: ${leito.ifBlank { "N/A" }}
+            • Procedimento Cirúrgico Proposto: ${tipoCirurgia.ifBlank { "Não informado/A definir" }}
 
-            2. HISTÓRICO CLÍNICO & ALERGIAS
-            --------------------------------------------------
-            Doenças Anteriores: ${doencasAnteriores.ifBlank { "Nenhuma" }}
-            Condições Anteriores: ${condicoesAnteriores.ifBlank { "Nenhuma" }}
-            Cirurgias Anteriores: ${cirurgiasAnteriores.ifBlank { "Nenhuma" }}
-            Alergias: ${alergias.ifBlank { "Negadas" }}
-            Medicações em Uso: ${medicacoesUso.ifBlank { "Nenhuma de uso contínuo" }}
-            Exames de Admissão: ${exames.ifBlank { "Nenhum anexado ou realizado" }}
+            * SINAIS VITAIS (REGISTRO FISIOLÓGICO DE ADMISSÃO):
+              - Pressão Arterial (PA): ${pressaoArterial.ifBlank { "Não registrada" }} mmHg
+              - Frequência Cardíaca (FC): ${frequenciaCardiaca.ifBlank { "Não aferida" }} bpm (${if (frequenciaCardiaca.isNotBlank()) {
+                  val fcVal = frequenciaCardiaca.replace(Regex("[^0-9]"), "").toIntOrNull()
+                  if (fcVal != null) {
+                      when {
+                          fcVal < 60 -> "bradicardia"
+                          fcVal > 100 -> "taquicardia"
+                          else -> "normotensivo/eucardia"
+                      }
+                  } else "regularidade ritmica"
+              } else "parâmetro ausente"})
+              - Frequência Respiratória (FR): ${frequenciaRespiratoria.ifBlank { "Não aferida" }} ipm (${if (frequenciaRespiratoria.isNotBlank()) {
+                  val frVal = frequenciaRespiratoria.replace(Regex("[^0-9]"), "").toIntOrNull()
+                  if (frVal != null) {
+                      when {
+                          frVal < 12 -> "bradipcneia"
+                          frVal > 20 -> "taquipneia"
+                          else -> "eupneia/padrão ventilatório estável"
+                      }
+                  } else "ritmicidade respiratória"
+              } else "parâmetro ausente"})
+              - Temperatura Corporal (T): ${temperatura.ifBlank { "Não aferida" }} ºC (${if (temperatura.isNotBlank()) {
+                  val tVal = temperatura.replace(",", ".").replace(Regex("[^0-9.]"), "").toDoubleOrNull()
+                  if (tVal != null) {
+                      when {
+                          tVal < 35.0 -> "hipotermia severa/moderada"
+                          tVal >= 37.8 -> "estado febril/piréxia"
+                          tVal >= 37.3 -> "subfebril"
+                          else -> "afebril/normotermia"
+                      }
+                  } else "termorregulação cutânea"
+              } else "parâmetro ausente"})
+              - Saturação de Oxigênio (SatO2): ${saturacaoO2.ifBlank { "Não aferida" }} % (${if (saturacaoO2.isNotBlank()) {
+                  val satVal = saturacaoO2.replace(Regex("[^0-9]"), "").toIntOrNull()
+                  if (satVal != null) {
+                      if (satVal < 95) "indício de hipoxemia" else "perfusão periférica de oxigênio adequada"
+                  } else "preservação tecidual"
+              } else "parâmetro ausente"})
 
-            3. SISTEMAS ORGÂNICOS & DISPOSITIVOS
-            --------------------------------------------------
-            • Sistema Locomotor: ${sistemaLocomotor.ifBlank { "Sem alterações" }}
-            • Cardiovascular: ${sistemaCardiovascular.ifBlank { "Sem alterações" }}
-            • Respiratório: ${sistemaRespiratorio.ifBlank { "Sem alterações" }}
-            • Neurológico: ${sistemaNeurologico.ifBlank { "Sem alterações" }}
-            • Nutrição: ${sistemaNutricao.ifBlank { "Dieta Geral Oral" }}
-            • Urinário: ${sistemaUrinario.ifBlank { "Sem alterações" }}
-            • Intestinal: ${sistemaIntestinal.ifBlank { "Sem alterações" }}
-            • Integridade da Pele: ${sistemaIntegridadePele.ifBlank { "Íntegra" }}
-            ${if (!lesionWidthCm.isNullOrBlank()) "   --> Planimetria da Lesão Principal: ${lesionWidthCm}x${lesionHeightCm} cm (Área: ${lesionAreaSquareCm} cm²)\n   --> Detalhes: $lesionDescriptionPlanimetria" else ""}
-            • Dispositivos em Uso: ${dispositivos.ifBlank { "Nenhum dispositivo ativo" }}
+            II. ANAMNESE E HISTÓRICO PATOLÓGICO SELECIONADO
+            --------------------------------------------------------------------------------
+            • Doenças Prévias/Comorbidades: ${doencasAnteriores.ifBlank { "Sem comorbidades prévias relatadas." }}
+            • Condições Clínicas Coexistentes: ${condicoesAnteriores.ifBlank { "Sem condições clínicas agudas crônicas coexistentes associadas." }}
+            • Antecedentes Cirúrgicos: ${cirurgiasAnteriores.ifBlank { "Sem histórico de procedimentos cirúrgicos prévios." }}
+            • Quadro Alérgico (Hipersensibilidade): ${alergias.ifBlank { "Alerta: Sem reações de hipersensibilidade orais ou medicamentosas conhecidas." }}
+            • Farmacologia em Uso Contínuo: ${medicacoesUso.ifBlank { "Nega terapia farmacológica contínua domiciliar ou de uso recente." }}
+            • Investigação Diagnóstica (Exames): ${exames.ifBlank { "Sem exames complementares de admissão anexados no momento." }}
 
-            4. EXAME FÍSICO & ACUIDADES SENSORIAIS
-            --------------------------------------------------
-            Acuidade Visual: ${acuidadeVisual.ifBlank { "Normal/Inalterada" }}
-            Acuidade Auditiva: ${acuidadeAuditiva.ifBlank { "Normal/Inalterada" }}
+            III. EXAME FÍSICO COM PREDOMÍNIO DE TERMOS TÉCNICOS (EXAME SISTÊMICO)
+            --------------------------------------------------------------------------------
+            • Sistema Locomotor / Mobilidade:
+              $loc
+            
+            • Sistema Cardiovascular / Hemodinâmica:
+              $cv
+            
+            • Sistema Respiratório / Ventilação:
+              $resp
+            
+            • Sistema Neurológico / Psiquismo:
+              $neur
+            
+            • Nutrição, Hidratação e Cavidade Oral:
+              $nutr
+            
+            • Sistema Geniturinário:
+              $urin
+            
+            • Sistema Gastrointestinal e Eliminações:
+              $intest
+            
+            • Sistema Tegumentar / Integridade Cutâneo-Mucosa:
+              $integ
+              ${if (!lesionWidthCm.isNullOrBlank()) "--> Planimetria Volumétrica da Lesão Principal: ${lesionWidthCm}x${lesionHeightCm} cm (Área estimada: ${lesionAreaSquareCm} cm²)\n  --> Características Morfológicas descritas: $lesionDescriptionPlanimetria" else ""}
+            
+            • Dispositivos Invasivos e Acessos:
+              $disp
 
-            5. ESCALAS DE AVALIAÇÃO CLÍNICA
-            --------------------------------------------------
-            A) ESCALA DE BRADEN (Risco de Lesão por Pressão):
-               • Percepção Sensorial: $bradenPercepcaoSensorial
-               • Umidade: $bradenUmidade
-               • Atividade: $bradenAtividade
-               • Mobilidade: $bradenMobilidade
-               • Nutrição: $bradenNutricao
-               • Fricção/Cisalhamento: $bradenFriccaoCisalhamento
-               TOTAL ESCORE BRADEN: ${bradenScore()} / 23 (${bradenClassification()})
+            IV. AVALIAÇÃO SENSÓRIO-COGNITIVA
+            --------------------------------------------------------------------------------
+            • Acuidade Visual: ${acuidadeVisual.ifBlank { "Preservada, sem necessidade de lentes corretivas." }}
+            • Acuidade Auditiva: ${acuidadeAuditiva.ifBlank { "Preservada, comunicação verbal sem barreiras (eufasia)." }}
 
-            B) ESCALA DE FUGULIN (Grau de Dependência):
-               • Estado Mental: $fugulinEstadoMental
-               • Oxigenação: $fugulinOxigenacao
-               • Sinais Vitais: $fugulinSinaisVitais
-               • Motilidade: $fugulinMotilidade
-               • Locomoção: $fugulinLocomocao
-               • Cuidado Corporal: $fugulinCuidadoCorporal
-               • Eliminação: $fugulinEliminacao
-               • Nutrição/Hidratação: $fugulinNutricaoHidratacao
-               • Terapêutica: $fugulinTerapeutica
-               TOTAL ESCORE FUGULIN: ${fugulinScore()} / 36 (${fugulinClassification()})
+            V. ESTRATIFICAÇÃO DE RISCO CLÍNICO E ESCALAS MULTIDIMENSIONAL
+            --------------------------------------------------------------------------------
+            A) ESCALA DE BRADEN (Avaliação de Risco para Lesão por Pressão - LPP):
+               • Critério Sensorial: $bradenPercepcaoSensorial | Umidade: $bradenUmidade | Atividade: $bradenAtividade
+               • Mobilidade: $bradenMobilidade | Nutrição: $bradenNutricao | Fricção e Cisalhamento: $bradenFriccaoCisalhamento
+               • ESCORE TOTAL DE BRADEN: ${bradenScore()} / 23 pontos
+               • DIAGNÓSTICO DE RISCO (Braden): ${bradenClassification().uppercase()}
 
-            C) ESCALA DE MORSE (Risco de Quedas):
-               • Histórico de Quedas: $morseHistoricoQuedas
-               • Diagnóstico Secundário: $morseDiagnosticoSecundario
-               • Auxílio na Locomoção: $morseAuxilioLocomocao
-               • Terapia Endovenosa: $morseTerapiaEV
-               • Marcha: $morseMarcha
-               • Estado Mental: $morseEstadoMental
-               TOTAL ESCORE MORSE: ${morseScore()} (${morseClassification()})
+            B) ESCALA DE FUGULIN (Estratificação de Grau de Dependência Assistencial da Enfermagem):
+               • Estado Mental: $fugulinEstadoMental | Oxigenação: $fugulinOxigenacao | Sinais Vitais: $fugulinSinaisVitais
+               • Motilidade: $fugulinMotilidade | Locomoção: $fugulinLocomocao | Cuidado Corporal: $fugulinCuidadoCorporal
+               • Eliminação: $fugulinEliminacao | Nutrição/Hidratação: $fugulinNutricaoHidratacao | Terapêutica: $fugulinTerapeutica
+               • ESCORE TOTAL DE FUGULIN: ${fugulinScore()} / 36 pontos
+               • COMPLEXIDADE DA ASSISTÊNCIA: ${fugulinClassification().uppercase()}
 
-            D) ESCALA DE GLASGOW (Nível de Consciência):
-               • Abertura Ocular: $glasgowAberturaOcular
-               • Resposta Verbal: $glasgowRespostaVerbal
-               • Resposta Motora: $glasgowRespostaMotora
-               TOTAL ESCORE GLASGOW: ${glasgowScore()} / 15 (${glasgowClassification()})
+            C) ESCALA DE MORSE (Predisposição e Risco de Evento de Quedas):
+               • Historial de Queda Recente: $morseHistoricoQuedas | Diagnóstico Secundário: $morseDiagnosticoSecundario
+               • Suporte para Deambulação: $morseAuxilioLocomocao | Terapia Endovenosa Ativa: $morseTerapiaEV
+               • Padrão de Marcha Corporal: $morseMarcha | Estado Mental Cognitivo: $morseEstadoMental
+               • ESCORE TOTAL DE MORSE: ${morseScore()} pontos
+               • PROTOCOLO DE PREVENÇÃO (Morse): ${morseClassification().uppercase()}
 
-            E) ESCALA ANALÓGICA DA DOR:
-               • Intensidade da Dor: $dorNivel / 10 (${dorClassification()})
-               • Localização da Dor: ${dorLocalizacao.ifBlank { "Não informada" }}
-               • Características da Dor: ${dorCaracteristicas.ifBlank { "Não informadas" }}
+            D) ESCALA DE COMA DE GLASGOW (Nível de Reatividade Neurológica):
+               • Abertura Ocular: $glasgowAberturaOcular | Resposta Verbal: $glasgowRespostaVerbal | Resposta Motora: $glasgowRespostaMotora
+               • ESCORE TOTAL DE GLASGOW: ${glasgowScore()} / 15 pontos (${glasgowClassification().uppercase()})
+
+            E) ESCALA VISUAL ANALÓGICA DA DOR (EVA - Semioticamente Estruturada):
+               • Nível de Intensidade Álgica: $dorNivel / 10 (${dorClassification().uppercase()})
+               • Localização Anatômica: ${dorLocalizacao.ifBlank { "Sem foco de dor ativo de acordo com relato verbal espontâneo." }}
+               • Características Clínicas da Dor: ${dorCaracteristicas.ifBlank { "Nega queixas álgicas no momento." }}
             $lesionsTable
-            ${if (aiInterventionsResult.isNotBlank()) "\n            ==================================================\n              RECOMENDAÇÕES CLÍNICAS E INTERVENÇÕES (IA)\n            ==================================================\n            $aiInterventionsResult" else ""}
+            ${if (aiInterventionsResult.isNotBlank()) "\n            ================================================================================\n              DIRETRIZES TERAPÊUTICAS E INTERVENÇÕES DA ASSISTÊNCIA (IA - GEMINI)\n            ================================================================================\n            $aiInterventionsResult" else ""}
 
-            --------------------------------------------------
-            Relatório gerado automaticamente em: $dataFormatada
-            ==================================================
+            --------------------------------------------------------------------------------
+            Relatório de Enfermagem padronizado e gerado eletronicamente em: $dataFormatada
+            ================================================================================
         """.trimIndent()
     }
 }

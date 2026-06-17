@@ -29,6 +29,11 @@ fun AdmissionRecord.toJsonObject(): JSONObject {
     obj.put("enfermaria", enfermaria)
     obj.put("leito", leito)
     obj.put("tipo_cirurgia", tipoCirurgia)
+    obj.put("pressao_arterial", pressaoArterial)
+    obj.put("frequencia_cardiaca", frequenciaCardiaca)
+    obj.put("frequencia_respiratoria", frequenciaRespiratoria)
+    obj.put("temperatura", temperatura)
+    obj.put("saturacao_o2", saturacaoO2)
     obj.put("sistema_locomotor", sistemaLocomotor)
     obj.put("sistema_cardiovascular", sistemaCardiovascular)
     obj.put("sistema_respiratorio", sistemaRespiratorio)
@@ -105,6 +110,11 @@ fun JSONObject.toAdmissionRecord(): AdmissionRecord {
         enfermaria = this.optString("enfermaria", ""),
         leito = this.optString("leito", ""),
         tipoCirurgia = this.optString("tipo_cirurgia", ""),
+        pressaoArterial = this.optString("pressao_arterial", ""),
+        frequenciaCardiaca = this.optString("frequencia_cardiaca", ""),
+        frequenciaRespiratoria = this.optString("frequencia_respiratoria", ""),
+        temperatura = this.optString("temperatura", ""),
+        saturacaoO2 = this.optString("saturacao_o2", ""),
         sistemaLocomotor = this.optString("sistema_locomotor", ""),
         sistemaCardiovascular = this.optString("sistema_cardiovascular", ""),
         sistemaRespiratorio = this.optString("sistema_respiratorio", ""),
@@ -166,21 +176,27 @@ fun JSONObject.toAdmissionRecord(): AdmissionRecord {
 object SupabaseClient {
     private const val TAG = "SupabaseClient"
 
-    private val supabaseUrl: String by lazy {
-        try {
+    private var customUrl: String? = null
+    private var customAnonKey: String? = null
+
+    fun updateConfig(url: String, anonKey: String) {
+        customUrl = if (url.isBlank()) null else url.trim()
+        customAnonKey = if (anonKey.isBlank()) null else anonKey.trim()
+    }
+
+    val supabaseUrl: String
+        get() = customUrl ?: try {
             BuildConfig.SUPABASE_URL
         } catch (e: Exception) {
             "https://your-project.supabase.co"
         }
-    }
 
-    private val supabaseAnonKey: String by lazy {
-        try {
+    val supabaseAnonKey: String
+        get() = customAnonKey ?: try {
             BuildConfig.SUPABASE_ANON_KEY
         } catch (e: Exception) {
             "your-supabase-public-anon-key"
         }
-    }
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
@@ -190,10 +206,29 @@ object SupabaseClient {
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
     fun isConfigured(): Boolean {
-        return supabaseUrl.isNotBlank() &&
-                supabaseUrl != "https://your-project.supabase.co" &&
-                supabaseAnonKey.isNotBlank() &&
-                supabaseAnonKey != "your-supabase-public-anon-key"
+        val url = supabaseUrl
+        val key = supabaseAnonKey
+        return url.isNotBlank() &&
+                url != "https://your-project.supabase.co" &&
+                key.isNotBlank() &&
+                key != "your-supabase-public-anon-key"
+    }
+
+    private fun getFullUrl(path: String): String {
+        val sanitizedBase = supabaseUrl.trim().trimEnd('/')
+        return if (sanitizedBase.contains("/rest/v1")) {
+            val endpoint = if (path.startsWith("/")) path else "/$path"
+            if (sanitizedBase.endsWith("/rest/v1")) {
+                "$sanitizedBase$endpoint"
+            } else {
+                // E.g. base already contains /rest/v1/
+                val cleanedBase = sanitizedBase.substringBefore("/rest/v1") + "/rest/v1"
+                "$cleanedBase$endpoint"
+            }
+        } else {
+            val formattedPath = if (path.startsWith("/")) path else "/$path"
+            "$sanitizedBase/rest/v1$formattedPath"
+        }
     }
 
     /**
@@ -207,7 +242,7 @@ object SupabaseClient {
 
         try {
             val jsonObject = record.toJsonObject()
-            val url = "$supabaseUrl/rest/v1/admissions"
+            val url = getFullUrl("admissions")
             val requestBody = jsonObject.toString().toRequestBody(jsonMediaType)
 
             val request = Request.Builder()
@@ -244,7 +279,7 @@ object SupabaseClient {
         }
 
         try {
-            val url = "$supabaseUrl/rest/v1/admissions?order=timestamp.desc"
+            val url = getFullUrl("admissions?order=timestamp.desc")
             val request = Request.Builder()
                 .url(url)
                 .header("apikey", supabaseAnonKey)
@@ -281,7 +316,7 @@ object SupabaseClient {
         if (!isConfigured()) return@withContext false
 
         try {
-            val url = "$supabaseUrl/rest/v1/admissions?id=eq.$id"
+            val url = getFullUrl("admissions?id=eq.$id")
             val request = Request.Builder()
                 .url(url)
                 .header("apikey", supabaseAnonKey)
@@ -302,6 +337,131 @@ object SupabaseClient {
         } catch (e: Exception) {
             Log.e(TAG, "Exception during Supabase delete: ${e.message}", e)
             false
+        }
+    }
+
+    private fun getAuthUrl(path: String): String {
+        val sanitizedBase = supabaseUrl.trim().trimEnd('/')
+        return if (sanitizedBase.contains("/rest/v1")) {
+            val cleanedBase = sanitizedBase.substringBefore("/rest/v1")
+            "$cleanedBase/auth/v1/$path"
+        } else {
+            "$sanitizedBase/auth/v1/$path"
+        }
+    }
+
+    /**
+     * Authenticated Sign Up
+     */
+    suspend fun signUp(email: String, password: String): Result<String> = withContext(Dispatchers.IO) {
+        if (!isConfigured()) {
+            return@withContext Result.failure(Exception("Supabase não configurado. Por favor, insira as chaves nas configurações."))
+        }
+        try {
+            val jsonObject = JSONObject().apply {
+                put("email", email.trim())
+                put("password", password.trim())
+            }
+            val requestBody = jsonObject.toString().toRequestBody(jsonMediaType)
+            val request = Request.Builder()
+                .url(getAuthUrl("signup"))
+                .header("apikey", supabaseAnonKey)
+                .header("Content-Type", "application/json")
+                .post(requestBody)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val bodyStr = response.body?.string() ?: ""
+                if (response.isSuccessful) {
+                    Result.success(bodyStr)
+                } else {
+                    val message = try {
+                        JSONObject(bodyStr).optString("msg", bodyStr)
+                    } catch (e: Exception) {
+                        bodyStr
+                    }
+                    Result.failure(Exception(message.ifBlank { "Erro desconhecido HTTP ${response.code}" }))
+                }
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Authenticated Sign In
+     */
+    suspend fun signIn(email: String, password: String): Result<String> = withContext(Dispatchers.IO) {
+        if (!isConfigured()) {
+            return@withContext Result.failure(Exception("Supabase não configurado. Por favor, insira as chaves nas configurações."))
+        }
+        try {
+            val jsonObject = JSONObject().apply {
+                put("email", email.trim())
+                put("password", password.trim())
+            }
+            val requestBody = jsonObject.toString().toRequestBody(jsonMediaType)
+            val request = Request.Builder()
+                .url(getAuthUrl("token?grant_type=password"))
+                .header("apikey", supabaseAnonKey)
+                .header("Content-Type", "application/json")
+                .post(requestBody)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val bodyStr = response.body?.string() ?: ""
+                if (response.isSuccessful) {
+                    Result.success(bodyStr)
+                } else {
+                    val message = try {
+                        val obj = JSONObject(bodyStr)
+                        val errorDesc = obj.optString("error_description", "")
+                        if (errorDesc.isNotBlank()) errorDesc else obj.optString("error", bodyStr)
+                    } catch (e: Exception) {
+                        bodyStr
+                    }
+                    Result.failure(Exception(message.ifBlank { "Erro desconhecido HTTP ${response.code}" }))
+                }
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Authenticated Password Recovery
+     */
+    suspend fun recoverPassword(email: String): Result<String> = withContext(Dispatchers.IO) {
+        if (!isConfigured()) {
+            return@withContext Result.failure(Exception("Supabase não configurado."))
+        }
+        try {
+            val jsonObject = JSONObject().apply {
+                put("email", email.trim())
+            }
+            val requestBody = jsonObject.toString().toRequestBody(jsonMediaType)
+            val request = Request.Builder()
+                .url(getAuthUrl("recover"))
+                .header("apikey", supabaseAnonKey)
+                .header("Content-Type", "application/json")
+                .post(requestBody)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val bodyStr = response.body?.string() ?: ""
+                if (response.isSuccessful) {
+                    Result.success(bodyStr)
+                } else {
+                    val message = try {
+                        JSONObject(bodyStr).optString("msg", bodyStr)
+                    } catch (e: Exception) {
+                        bodyStr
+                    }
+                    Result.failure(Exception(message.ifBlank { "Erro desconhecido HTTP ${response.code}" }))
+                }
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 }

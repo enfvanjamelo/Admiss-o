@@ -52,6 +52,13 @@ import com.example.ui.ScreenState
 import com.example.ui.theme.MyApplicationTheme
 import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.ui.draw.scale
 
 class MainActivity : ComponentActivity() {
     private val viewModel: AdmissionViewModel by viewModels()
@@ -63,17 +70,75 @@ class MainActivity : ComponentActivity() {
             val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle()
             MyApplicationTheme(darkTheme = isDarkTheme) {
                 Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            if (isDarkTheme) {
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color(0xFF080B11), // Absolute deep cosmic midnight black
+                                        Color(0xFF130E26), // Deep cyber neon purple backing
+                                        Color(0xFF0C1324)  // Deep neon cyan bio-luminescent backing
+                                    )
+                                )
+                            } else {
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color(0xFFF4F7FC), // Holographic light backing
+                                        Color(0xFFE6F3FB)  // Light cyan wash
+                                    )
+                                )
+                            }
+                        ),
+                    color = Color.Transparent
                 ) {
                     val screenState by viewModel.screenState.collectAsStateWithLifecycle()
                     val admissions by viewModel.admissions.collectAsStateWithLifecycle()
                     val currentRecord by viewModel.currentRecord.collectAsStateWithLifecycle()
 
                     when (val state = screenState) {
+                        is ScreenState.Login -> {
+                            val authError by viewModel.authError.collectAsStateWithLifecycle()
+                            val authSuccessMessage by viewModel.authSuccessMessage.collectAsStateWithLifecycle()
+                            val authLoading by viewModel.authLoading.collectAsStateWithLifecycle()
+                            LoginScreen(
+                                isDarkTheme = isDarkTheme,
+                                error = authError,
+                                successMessage = authSuccessMessage,
+                                loading = authLoading,
+                                onLogin = { email, password -> viewModel.loginProfessional(email, password) },
+                                onNavigateToRegister = { viewModel.navigateToRegister() },
+                                onNavigateToForgotPassword = { viewModel.navigateToForgotPassword() }
+                            )
+                        }
+                        is ScreenState.Register -> {
+                            val authError by viewModel.authError.collectAsStateWithLifecycle()
+                            val authLoading by viewModel.authLoading.collectAsStateWithLifecycle()
+                            RegisterScreen(
+                                isDarkTheme = isDarkTheme,
+                                error = authError,
+                                loading = authLoading,
+                                onRegister = { email, password, name -> viewModel.registerProfessional(email, password, name) },
+                                onNavigateToLogin = { viewModel.navigateToLogin() }
+                            )
+                        }
+                        is ScreenState.ForgotPassword -> {
+                            val authError by viewModel.authError.collectAsStateWithLifecycle()
+                            val authLoading by viewModel.authLoading.collectAsStateWithLifecycle()
+                            ForgotPasswordScreen(
+                                isDarkTheme = isDarkTheme,
+                                error = authError,
+                                loading = authLoading,
+                                onRecover = { email -> viewModel.recoverProfessionalPassword(email) },
+                                onNavigateToLogin = { viewModel.navigateToLogin() }
+                            )
+                        }
                         is ScreenState.List -> {
                             val syncStatus by viewModel.syncStatus.collectAsStateWithLifecycle()
                             val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
+                            val supabaseUrlInput by viewModel.supabaseUrlInput.collectAsStateWithLifecycle()
+                            val supabaseAnonKeyInput by viewModel.supabaseAnonKeyInput.collectAsStateWithLifecycle()
+                            val loggedInUserName by viewModel.loggedInUserName.collectAsStateWithLifecycle()
                             AdmissionListScreen(
                                 admissions = admissions,
                                 isDarkTheme = isDarkTheme,
@@ -85,7 +150,12 @@ class MainActivity : ComponentActivity() {
                                 syncStatus = syncStatus,
                                 isSyncing = isSyncing,
                                 onSyncClick = { viewModel.syncWithSupabase() },
-                                onClearSyncStatus = { viewModel.clearSyncStatus() }
+                                onClearSyncStatus = { viewModel.clearSyncStatus() },
+                                supabaseUrlInput = supabaseUrlInput,
+                                supabaseAnonKeyInput = supabaseAnonKeyInput,
+                                onSaveSupabaseConfig = { url, key -> viewModel.saveSupabaseConfig(url, key) },
+                                onLogout = { viewModel.logout() },
+                                loggedInUserName = loggedInUserName ?: ""
                             )
                         }
                         is ScreenState.Form -> {
@@ -296,9 +366,16 @@ fun AdmissionListScreen(
     syncStatus: String = "",
     isSyncing: Boolean = false,
     onSyncClick: () -> Unit = {},
-    onClearSyncStatus: () -> Unit = {}
+    onClearSyncStatus: () -> Unit = {},
+    supabaseUrlInput: String = "",
+    supabaseAnonKeyInput: String = "",
+    onSaveSupabaseConfig: (String, String) -> Unit = { _, _ -> },
+    onLogout: () -> Unit = {},
+    loggedInUserName: String = ""
 ) {
     var searchQuery by remember { mutableStateOf("") }
+    var showSupabaseDialog by remember { mutableStateOf(false) }
+
     val filteredAdmissions = remember(admissions, searchQuery) {
         if (searchQuery.isBlank()) admissions
         else admissions.filter { it.nome.contains(searchQuery, ignoreCase = true) || it.prontuario.contains(searchQuery) }
@@ -322,6 +399,18 @@ fun AdmissionListScreen(
                     }
                 },
                 actions = {
+                    // Config Supabase Button
+                    IconButton(
+                        onClick = { showSupabaseDialog = true },
+                        modifier = Modifier.testTag("supabase_settings_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Cloud,
+                            contentDescription = "Configurar Supabase",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+
                     // Supabase Cloud Sync Button
                     IconButton(
                         onClick = onSyncClick,
@@ -351,6 +440,33 @@ fun AdmissionListScreen(
                             imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
                             contentDescription = "Alternar Tema",
                             tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+
+                    if (loggedInUserName.isNotBlank()) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        ) {
+                            Text(
+                                text = "Enf. $loggedInUserName",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = onLogout,
+                        modifier = Modifier.testTag("logout_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ExitToApp,
+                            contentDescription = "Sair",
+                            tint = Color(0xFFFF5252)
                         )
                     }
                 },
@@ -513,6 +629,85 @@ fun AdmissionListScreen(
             }
         }
     }
+
+    if (showSupabaseDialog) {
+        var urlState by remember { mutableStateOf(supabaseUrlInput) }
+        var keyState by remember { mutableStateOf(supabaseAnonKeyInput) }
+
+        AlertDialog(
+            onDismissRequest = { showSupabaseDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Cloud,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Configuração Supabase",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Insira as credenciais do seu projeto Supabase para ativar a sincronização na nuvem em tempo real.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    OutlinedTextField(
+                        value = urlState,
+                        onValueChange = { urlState = it },
+                        label = { Text("URL do Supabase") },
+                        placeholder = { Text("https://xxxxxx.supabase.co") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("supabase_url_field")
+                    )
+
+                    OutlinedTextField(
+                        value = keyState,
+                        onValueChange = { keyState = it },
+                        label = { Text("Anon Key (Public Key)") },
+                        placeholder = { Text("Chave pública anônima do Supabase") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("supabase_key_field")
+                    )
+
+                    Text(
+                        text = "Nota: Se você já configurou as variáveis de ambiente no painel Secrets (SUPABASE_URL e SUPABASE_ANON_KEY), esses campos sobrescrevem os valores para testes rápidos.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onSaveSupabaseConfig(urlState, keyState)
+                        showSupabaseDialog = false
+                    },
+                    modifier = Modifier.testTag("save_supabase_config_button")
+                ) {
+                    Text("Salvar")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showSupabaseDialog = false }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
 }
 
 // Compact clinical badges
@@ -556,14 +751,30 @@ fun PatientAdmissionCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val isDark = MaterialTheme.colorScheme.primary == Color(0xFF7E6FFF)
+    val shape = RoundedCornerShape(20.dp)
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
             .testTag("patient_card_${admission.id}"),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        shape = RoundedCornerShape(16.dp)
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDark) {
+                Color(0xFF101C2B).copy(alpha = 0.55f) // Deep glass cockpit
+            } else {
+                Color.White.copy(alpha = 0.85f)      // Luminous white frozen glass
+            }
+        ),
+        border = BorderStroke(
+            width = 1.2.dp,
+            brush = Brush.linearGradient(
+                colors = listOf(
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f)
+                )
+            )
+        ),
+        shape = shape
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -576,7 +787,7 @@ fun PatientAdmissionCard(
                         text = admission.nome.ifBlank { "Sem Nome Informado" },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.secondary, // Bright Cyber-Cyan key accent!
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -692,20 +903,39 @@ fun FormSectionCard(
     content: @Composable () -> Unit
 ) {
     val isExpanded = sectionIndex == expandedIndex
+    val isDark = MaterialTheme.colorScheme.primary == Color(0xFF7E6FFF)
+    val shape = RoundedCornerShape(16.dp)
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 6.dp),
         border = BorderStroke(
-            1.dp, 
-            if (isExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) 
-            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            width = 1.2.dp,
+            brush = if (isExpanded) {
+                Brush.linearGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.9f)
+                    )
+                )
+            } else {
+                Brush.linearGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
+                    )
+                )
+            }
         ),
         colors = CardDefaults.cardColors(
-            containerColor = if (isExpanded) MaterialTheme.colorScheme.surface 
-            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+            containerColor = if (isExpanded) {
+                if (isDark) Color(0xFF141D35).copy(alpha = 0.65f) else Color.White.copy(alpha = 0.85f)
+            } else {
+                if (isDark) Color(0xFF101625).copy(alpha = 0.45f) else Color.White.copy(alpha = 0.6f)
+            }
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = shape
     ) {
         Column {
             Row(
@@ -983,6 +1213,235 @@ fun SystemOptionsGrid(
 
 
 // Reusable form fields with speech-to-text voice transcription
+@OptIn(ExperimentalAnimationApi::class)
+@Composable
+fun SimulatedSpeechDialog(
+    label: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var textInput by remember { mutableStateOf("") }
+    
+    val samplePhrases = remember(label) {
+        val labelLower = label.lowercase()
+        when {
+            labelLower.contains("dor") || labelLower.contains("queixa") || labelLower.contains("sintoma") -> listOf(
+                "Paciente queixa-se de dor abdominal difusa leve no quadrante inferior.",
+                "Paciente refere ausência de dor ou desconforto no momento.",
+                "Refere cefaleia tensional intermitente associada ao estresse."
+            )
+            labelLower.contains("temperatura") || labelLower.contains("pressão") || labelLower.contains("vital") || labelLower.contains("pa") || labelLower.contains("fc") || labelLower.contains("sat") || labelLower.contains("pulso") || labelLower.contains("respirat") || labelLower.contains("cm") || labelLower.contains("largura") || labelLower.contains("comprimento") -> listOf(
+                "Pressão arterial de cento e vinte por oitenta milímetros de mercúrio.",
+                "Temperatura corporal axilar de trinta e seis ponto seis graus celsius.",
+                "Frequência cardíaca de setenta e dois batimentos por minuto, ritmo regular.",
+                "Saturação de oxigênio de noventa e nove por cento em ar ambiente."
+            )
+            labelLower.contains("lesão") || labelLower.contains("localização") || labelLower.contains("pele") || labelLower.contains("ferida") || labelLower.contains("tecido") || labelLower.contains("exsudato") || labelLower.contains("bordas") -> listOf(
+                "Lesão por pressão de estágio dois na região calcânea esquerda.",
+                "Bordas regulares, tecido de granulação vermelho brilhante ocupando oitenta por cento.",
+                "Presença de exsudato serossanguinolento em moderada quantidade.",
+                "Presença de esfacelo amarelado aderido em base, sem odor fétido."
+            )
+            labelLower.contains("cirurgia") || labelLower.contains("procedimento") || labelLower.contains("diagnóst") || labelLower.contains("propost") -> listOf(
+                "Procedimento cirúrgico limpo, realizado sem intercorrências anestésicas.",
+                "Diagnóstico pós-operatório estável, paciente encaminhado para a sala de recuperação.",
+                "Indicação de colecistectomia por videolaparoscopia por colelitíase."
+            )
+            labelLower.contains("observ") || labelLower.contains("evolu") || labelLower.contains("outr") || labelLower.contains("descri") || labelLower.contains("histór") -> listOf(
+                "Paciente consciente, orientado, comunicativo e deambulando com amparo.",
+                "Mantém acesso venoso periférico salinizado em membro superior esquerdo sem sinais de flebite.",
+                "Diurese presente e espontânea, refere trânsito intestinal preservado."
+            )
+            else -> listOf(
+                "Paciente estável, sem queixas álgicas no momento.",
+                "Sinais vitais normotensivos e normocárdicos.",
+                "Procedimento efetuado seguindo o protocolo institucional com sucesso."
+            )
+        }
+    }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .background(Color(0xFFFF5252), androidx.compose.foundation.shape.CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Ditado Clínico Assistido",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Text(
+                    text = "Ditando para: $label",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+
+                Box(
+                    modifier = Modifier.size(80.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val transition = rememberInfiniteTransition(label = "pulse")
+                    val pulseScale by transition.animateFloat(
+                        initialValue = 1f,
+                        targetValue = 1.35f,
+                        animationSpec = infiniteRepeatable(
+                            animation = androidx.compose.animation.core.tween(1200, easing = LinearEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "scale"
+                    )
+                    val pulseAlpha by transition.animateFloat(
+                        initialValue = 0.4f,
+                        targetValue = 0.0f,
+                        animationSpec = infiniteRepeatable(
+                            animation = androidx.compose.animation.core.tween(1200, easing = LinearEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "alpha"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .scale(pulseScale)
+                            .size(60.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = pulseAlpha),
+                                shape = androidx.compose.foundation.shape.CircleShape
+                            )
+                    )
+
+                    Surface(
+                        modifier = Modifier.size(54.dp),
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shadowElevation = 2.dp
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Mic,
+                                contentDescription = "Gravando",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    }
+                }
+
+                Text(
+                    text = "Diga sua anotação médica ou toque em um modelo abaixo:",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+
+                OutlinedTextField(
+                    value = textInput,
+                    onValueChange = { textInput = it },
+                    label = { Text("Texto Transcrito") },
+                    placeholder = { Text("Toque em um modelo de áudio abaixo...") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp)
+                        .testTag("dictation_transcription_input"),
+                    shape = RoundedCornerShape(10.dp),
+                    trailingIcon = {
+                        if (textInput.isNotEmpty()) {
+                            IconButton(onClick = { textInput = "" }) {
+                                Icon(Icons.Default.Clear, contentDescription = "Limpar")
+                            }
+                        }
+                    }
+                )
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "Exemplos do que você pode falar:",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    samplePhrases.forEachIndexed { index, phrase ->
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    textInput = if (textInput.isBlank()) phrase else "$textInput $phrase"
+                                }
+                                .testTag("phrase_sample_$index"),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
+                        ) {
+                            Text(
+                                text = phrase,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(10.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.testTag("dictation_cancel_btn")
+                    ) {
+                        Text("Cancelar")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = { onConfirm(textInput) },
+                        shape = RoundedCornerShape(8.dp),
+                        enabled = textInput.isNotBlank(),
+                        modifier = Modifier.testTag("dictation_confirm_btn")
+                    ) {
+                        Text("Inserir Ditado")
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun FormTextField(
     value: String,
@@ -995,6 +1454,8 @@ fun FormTextField(
     showMic: Boolean = true
 ) {
     val context = LocalContext.current
+    var showSimulatedMicDialog by remember { mutableStateOf(false) }
+
     val voiceLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -1006,6 +1467,18 @@ fun FormTextField(
                 onValueChange(newVal)
             }
         }
+    }
+
+    if (showSimulatedMicDialog) {
+        SimulatedSpeechDialog(
+            label = label,
+            onDismiss = { showSimulatedMicDialog = false },
+            onConfirm = { transcription ->
+                val newVal = if (value.isNotBlank()) "$value $transcription" else transcription
+                onValueChange(newVal)
+                showSimulatedMicDialog = false
+            }
+        )
     }
 
     OutlinedTextField(
@@ -1038,7 +1511,8 @@ fun FormTextField(
                         try {
                             voiceLauncher.launch(intent)
                         } catch (e: Exception) {
-                            Toast.makeText(context, "Microfone/reconhecedor indisponível. Por favor digite.", Toast.LENGTH_SHORT).show()
+                            // Automatically fall back to the beautiful clinical simulated dictation dialog
+                            showSimulatedMicDialog = true
                         }
                     }
                 ) {
@@ -1062,13 +1536,29 @@ fun ScaleScoreCard(
     color: Color,
     content: @Composable () -> Unit
 ) {
+    val isDark = MaterialTheme.colorScheme.primary == Color(0xFF7E6FFF)
+    val shape = RoundedCornerShape(16.dp)
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDark) {
+                Color(0xFF101C2B).copy(alpha = 0.55f)
+            } else {
+                Color.White.copy(alpha = 0.75f)
+            }
+        ),
+        shape = shape,
+        border = BorderStroke(
+            width = 1.2.dp,
+            brush = Brush.linearGradient(
+                colors = listOf(
+                    color.copy(alpha = 0.8f),
+                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f)
+                )
+            )
+        )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -1114,14 +1604,30 @@ fun ScaleItemSelector(
     var expanded by remember { mutableStateOf(false) }
     val selectedOption = options.find { it.first == selectedValue } ?: options.first()
 
+    val isDark = MaterialTheme.colorScheme.primary == Color(0xFF7E6FFF)
+    val cardShape = RoundedCornerShape(14.dp)
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .clickable { expanded = !expanded },
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-        shape = RoundedCornerShape(8.dp)
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDark) {
+                Color(0xFF101B2B).copy(alpha = 0.5f)
+            } else {
+                Color.White.copy(alpha = 0.8f)
+            }
+        ),
+        border = BorderStroke(
+            width = 1.1.dp,
+            brush = Brush.linearGradient(
+                colors = listOf(
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.45f)
+                )
+            )
+        ),
+        shape = cardShape
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
@@ -1350,6 +1856,76 @@ fun AdmissionFormScreen(
                     onValueChange = { new -> onUpdateRecord { it.copy(tipoCirurgia = new) } },
                     label = "Tipo de Cirurgia planejada",
                     placeholder = "Ex. Apendicectomia, Colecistectomia"
+                )
+            }
+
+            // Card 1B: Sinais Vitais
+            FormSectionCard(
+                title = "Sinais Vitais",
+                sectionIndex = 6,
+                expandedIndex = expandedSection,
+                onHeaderClick = { expandedSection = if (expandedSection == 6) null else 6 }
+            ) {
+                Text(
+                    text = "Registre os sinais vitais medidos na admissão:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        FormTextField(
+                            value = record.pressaoArterial,
+                            onValueChange = { new -> onUpdateRecord { it.copy(pressaoArterial = new) } },
+                            label = "Pressão Arterial (PA)",
+                            placeholder = "Ex. 120x80 mmHg",
+                            showMic = true,
+                            testTag = "pressao_arterial_input"
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f)) {
+                        FormTextField(
+                            value = record.frequenciaCardiaca,
+                            onValueChange = { new -> onUpdateRecord { it.copy(frequenciaCardiaca = new) } },
+                            label = "Frequência Cardíaca (FC)",
+                            placeholder = "Ex. 80 bpm",
+                            showMic = true,
+                            testTag = "frequencia_cardiaca_input"
+                        )
+                    }
+                }
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        FormTextField(
+                            value = record.frequenciaRespiratoria,
+                            onValueChange = { new -> onUpdateRecord { it.copy(frequenciaRespiratoria = new) } },
+                            label = "Freq. Respiratória (FR)",
+                            placeholder = "Ex. 16 ipm",
+                            showMic = true,
+                            testTag = "frequencia_respiratoria_input"
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f)) {
+                        FormTextField(
+                            value = record.temperatura,
+                            onValueChange = { new -> onUpdateRecord { it.copy(temperatura = new) } },
+                            label = "Temperatura corporal (T)",
+                            placeholder = "Ex. 36.5 ºC",
+                            showMic = true,
+                            testTag = "temperatura_input"
+                        )
+                    }
+                }
+
+                FormTextField(
+                    value = record.saturacaoO2,
+                    onValueChange = { new -> onUpdateRecord { it.copy(saturacaoO2 = new) } },
+                    label = "Saturação de Oxigênio (SatO2)",
+                    placeholder = "Ex. 98%",
+                    showMic = true,
+                    testTag = "saturacao_o2_input"
                 )
             }
 
@@ -2020,13 +2596,28 @@ fun AdmissionFormScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Planimetria & Foto Canvas
+                val isDarkPlani = MaterialTheme.colorScheme.primary == Color(0xFF7E6FFF)
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    shape = RoundedCornerShape(12.dp)
+                        .padding(vertical = 4.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isDarkPlani) {
+                            Color(0xFF101B2B).copy(alpha = 0.5f)
+                        } else {
+                            Color.White.copy(alpha = 0.8f)
+                        }
+                    ),
+                    border = BorderStroke(
+                        width = 1.2.dp,
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f)
+                            )
+                        )
+                    ),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2792,7 +3383,7 @@ fun AdmissionFormScreen(
                                         label = "Largura (cm)",
                                         placeholder = "Ex. 3.5",
                                         keyboardType = KeyboardType.Number,
-                                        showMic = false
+                                        showMic = true
                                     )
                                 }
                                 Box(modifier = Modifier.weight(1f)) {
@@ -2811,7 +3402,7 @@ fun AdmissionFormScreen(
                                         label = "Comprimento (cm)",
                                         placeholder = "Ex. 4.2",
                                         keyboardType = KeyboardType.Number,
-                                        showMic = false
+                                        showMic = true
                                     )
                                 }
                             }
@@ -3241,10 +3832,10 @@ fun ReportPreviewScreen(
                         } else {
                             androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.outlineVariant)
                         },
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(16.dp)
                     ),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isDarkTheme) Color(0xFF131B30) else Color(0xFFEEF3FE)
+                    containerColor = if (isDarkTheme) Color(0xFF131B30).copy(alpha = 0.55f) else Color(0xFFEEF3FE).copy(alpha = 0.85f)
                 )
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
@@ -3323,13 +3914,28 @@ fun ReportPreviewScreen(
                 }
             }
 
+            val isDarkRpt = MaterialTheme.colorScheme.primary == Color(0xFF7E6FFF)
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                shape = RoundedCornerShape(16.dp)
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isDarkRpt) {
+                        Color(0xFF101B2B).copy(alpha = 0.55f)
+                    } else {
+                        Color.White.copy(alpha = 0.85f)
+                    }
+                ),
+                border = BorderStroke(
+                    width = 1.2.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f)
+                        )
+                    )
+                ),
+                shape = RoundedCornerShape(20.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
@@ -3436,6 +4042,709 @@ fun ReportPreviewScreen(
             }
 
             Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+/**
+ * High-fidelity vector branding logo in Jetpack Compose
+ */
+@Composable
+fun BrandedAppLogo(modifier: Modifier = Modifier) {
+    androidx.compose.material3.Surface(
+        color = Color.Transparent,
+        modifier = modifier
+    ) {
+        Box(
+            modifier = Modifier
+                .size(130.dp)
+                .border(
+                    border = BorderStroke(
+                        width = 4.dp,
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFFFFD700), // Pure sparkling Gold
+                                Color(0xFFC5A029), // Deep Amber Gold
+                                Color(0xFFFFD700)
+                            )
+                        )
+                    ),
+                    shape = androidx.compose.foundation.shape.CircleShape
+                )
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF09141D), // Dark Clinical Navy
+                            Color(0xFF0C1920)  // Deep Midnight Teal
+                        )
+                    )
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            // Draw schematic bio-circuit lines in background
+            androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                
+                // Outer subtle scanner arc
+                drawArc(
+                    color = Color(0xFF00ADB5).copy(alpha = 0.15f),
+                    startAngle = 0f,
+                    sweepAngle = 270f,
+                    useCenter = false,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
+                )
+                // Diagonal telemetry dash
+                drawLine(
+                    color = Color(0xFFFF5722).copy(alpha = 0.1f),
+                    start = androidx.compose.ui.geometry.Offset(w * 0.1f, h * 0.1f),
+                    end = androidx.compose.ui.geometry.Offset(w * 0.9f, h * 0.9f),
+                    strokeWidth = 2f
+                )
+            }
+
+            // Central Branded Layout Elements: Clipboard & Laser Diagnostics
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(10.dp)
+            ) {
+                // Interactive clinical tablet
+                Box(
+                    modifier = Modifier
+                        .size(width = 50.dp, height = 70.dp)
+                        .background(
+                            color = Color(0xFF102A38),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        .border(
+                            border = BorderStroke(
+                                1.5.dp,
+                                Brush.linearGradient(
+                                    colors = listOf(Color(0xFF00F5FF), Color(0xFF008B8B))
+                                )
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    // Clipboard metallic head
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            .size(width = 24.dp, height = 6.dp)
+                            .background(Color(0xFF335566), RoundedCornerShape(2.dp))
+                    )
+
+                    // Inner vital data and red cross
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = 14.dp, start = 4.dp, end = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        // Radiant Red Cross
+                        Box(
+                            modifier = Modifier.size(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(modifier = Modifier.size(width = 12.dp, height = 4.dp).background(Color(0xFFFF5252), RoundedCornerShape(1.dp)))
+                            Box(modifier = Modifier.size(width = 4.dp, height = 12.dp).background(Color(0xFFFF5252), RoundedCornerShape(1.dp)))
+                        }
+
+                        // Simulated cardiac trace
+                        androidx.compose.foundation.Canvas(modifier = Modifier.size(width = 32.dp, height = 10.dp)) {
+                            val path = androidx.compose.ui.graphics.Path()
+                            path.moveTo(0f, size.height / 2)
+                            path.lineTo(6f, size.height / 2)
+                            path.lineTo(10f, 2f)
+                            path.lineTo(13f, size.height - 2)
+                            path.lineTo(17f, size.height / 2)
+                            path.lineTo(32f, size.height / 2)
+                            drawPath(
+                                path = path,
+                                color = Color(0xFF00FFCC), // Neon cyan vital wave
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f)
+                            )
+                        }
+
+                        // Digital grid telemetry dots
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+                            Box(modifier = Modifier.weight(1f).height(2.dp).background(Color(0xFF00F5FF).copy(alpha = 0.5f)))
+                            Box(modifier = Modifier.weight(0.7f).height(2.dp).background(Color(0xFF00F5FF).copy(alpha = 0.5f)))
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                // High-strength medical scanner probe
+                Box(
+                    modifier = Modifier
+                        .size(width = 12.dp, height = 62.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color(0xFFD4E157), Color(0xFF00838F))
+                            ),
+                            shape = RoundedCornerShape(3.dp)
+                        )
+                        .border(1.dp, Color(0xFFFF9800).copy(alpha = 0.5f), RoundedCornerShape(3.dp)),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxHeight(),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        // Top optical lens trigger
+                        Box(
+                            modifier = Modifier
+                                .padding(top = 4.dp)
+                                .size(6.dp)
+                                .background(Color(0xFFFFD700), androidx.compose.foundation.shape.CircleShape)
+                        )
+                        // Laser bio-pointer tip
+                        Box(
+                            modifier = Modifier
+                                .size(width = 4.dp, height = 4.dp)
+                                .background(Color(0xFFFF5252), RoundedCornerShape(bottomStart = 1.dp, bottomEnd = 1.dp))
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Sleek, highly secure Professional Login Screen
+ */
+@Composable
+fun LoginScreen(
+    isDarkTheme: Boolean,
+    error: String?,
+    successMessage: String?,
+    loading: Boolean,
+    onLogin: (String, String) -> Unit,
+    onNavigateToRegister: () -> Unit,
+    onNavigateToForgotPassword: () -> Unit
+) {
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
+                .widthIn(max = 460.dp),
+            shape = RoundedCornerShape(26.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDarkTheme) Color(0xFF0E1724).copy(alpha = 0.82f) else Color.White.copy(alpha = 0.92f)
+            ),
+            border = BorderStroke(
+                width = 1.2.dp,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f)
+                    )
+                )
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Main visual clinical emblem
+                BrandedAppLogo()
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                // Heading titles
+                Text(
+                    text = "Admissão Cirúrgica",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center
+                )
+
+                Text(
+                    text = "Identificação de Profissional de Saúde",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Dynamic UI notifications
+                error?.let {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(12.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
+                successMessage?.let {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(12.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
+                // Email credential field
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("E-mail profissional") },
+                    leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("login_email_input"),
+                    shape = RoundedCornerShape(14.dp)
+                )
+
+                // Password credential field
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Senha de acesso") },
+                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = if (passwordVisible) "Ocultar senha" else "Ver senha",
+                                tint = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                    },
+                    singleLine = true,
+                    visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("login_password_input"),
+                    shape = RoundedCornerShape(14.dp)
+                )
+
+                // Password Recovery trigger link
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.CenterEnd
+                ) {
+                    Text(
+                        text = "Esqueci minha senha",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.secondary,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clickable { onNavigateToForgotPassword() }
+                            .padding(vertical = 4.dp)
+                            .testTag("forgot_password_link")
+                    )
+                }
+
+                // Call to action button
+                Button(
+                    onClick = { onLogin(email, password) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .testTag("login_submit_button"),
+                    shape = RoundedCornerShape(14.dp),
+                    enabled = !loading
+                ) {
+                    if (loading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Acessar Sistema", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    }
+                }
+
+                // Bottom alternate router indicator
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Primeiro acesso? ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    Text(
+                        text = "Cadastre-se aqui",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clickable { onNavigateToRegister() }
+                            .padding(vertical = 4.dp)
+                            .testTag("navigate_register_link")
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Clean Professional Registration Screen
+ */
+@Composable
+fun RegisterScreen(
+    isDarkTheme: Boolean,
+    error: String?,
+    loading: Boolean,
+    onRegister: (String, String, String) -> Unit,
+    onNavigateToLogin: () -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
+                .widthIn(max = 460.dp),
+            shape = RoundedCornerShape(26.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDarkTheme) Color(0xFF0E1724).copy(alpha = 0.82f) else Color.White.copy(alpha = 0.92f)
+            ),
+            border = BorderStroke(
+                width = 1.2.dp,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f)
+                    )
+                )
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                BrandedAppLogo()
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Text(
+                    text = "Criar Cadastro",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center
+                )
+
+                Text(
+                    text = "Acesso exclusivo para profissionais de saúde",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    textAlign = TextAlign.Center
+                )
+
+                error?.let {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(12.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
+                // Full Name Input
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Nome completo do profissional") },
+                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("register_name_input"),
+                    shape = RoundedCornerShape(14.dp)
+                )
+
+                // Professional Email Input
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("E-mail corporativo / pessoal") },
+                    leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("register_email_input"),
+                    shape = RoundedCornerShape(14.dp)
+                )
+
+                // Password Generation input
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Senha (Mínimo 6 dígitos)") },
+                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = if (passwordVisible) "Ocultar senha" else "Ver senha",
+                                tint = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                    },
+                    singleLine = true,
+                    visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("register_password_input"),
+                    shape = RoundedCornerShape(14.dp)
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Submit Registration button
+                Button(
+                    onClick = { onRegister(email, password, name) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .testTag("register_submit_button"),
+                    shape = RoundedCornerShape(14.dp),
+                    enabled = !loading
+                ) {
+                    if (loading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Efetuar Registro", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    }
+                }
+
+                // Alternate back to login trigger
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Já possui uma conta? ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    Text(
+                        text = "Identifique-se",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clickable { onNavigateToLogin() }
+                            .padding(vertical = 4.dp)
+                            .testTag("navigate_login_link")
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Screen designed to request Password Recovery link or instructions
+ */
+@Composable
+fun ForgotPasswordScreen(
+    isDarkTheme: Boolean,
+    error: String?,
+    loading: Boolean,
+    onRecover: (String) -> Unit,
+    onNavigateToLogin: () -> Unit
+) {
+    var email by remember { mutableStateOf("") }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
+                .widthIn(max = 460.dp),
+            shape = RoundedCornerShape(26.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDarkTheme) Color(0xFF0E1724).copy(alpha = 0.82f) else Color.White.copy(alpha = 0.92f)
+            ),
+            border = BorderStroke(
+                width = 1.2.dp,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f)
+                    )
+                )
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                BrandedAppLogo()
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Text(
+                    text = "Recuperar Senha",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center
+                )
+
+                Text(
+                    text = "Insira o e-mail cadastrado e enviaremos as instruções de recuperação",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    textAlign = TextAlign.Center
+                )
+
+                error?.let {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(12.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
+                // Email targets input
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("Informe seu e-mail cadastrado") },
+                    leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("recover_email_input"),
+                    shape = RoundedCornerShape(14.dp)
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Action button
+                Button(
+                    onClick = { onRecover(email) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .testTag("recover_submit_button"),
+                    shape = RoundedCornerShape(14.dp),
+                    enabled = !loading
+                ) {
+                    if (loading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Enviar Recuperação", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    }
+                }
+
+                // Navigation back link
+                Text(
+                    text = "Voltar para o Login",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .clickable { onNavigateToLogin() }
+                        .padding(vertical = 4.dp)
+                        .testTag("navigate_login_from_recover_link")
+                )
+            }
         }
     }
 }

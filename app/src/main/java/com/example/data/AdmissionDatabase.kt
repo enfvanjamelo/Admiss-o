@@ -29,7 +29,7 @@ interface AdmissionDao {
     suspend fun deleteAdmissionById(id: Long)
 }
 
-@Database(entities = [AdmissionRecord::class], version = 4, exportSchema = false)
+@Database(entities = [AdmissionRecord::class], version = 5, exportSchema = false)
 abstract class AdmissionDatabase : RoomDatabase() {
     abstract fun admissionDao(): AdmissionDao
 
