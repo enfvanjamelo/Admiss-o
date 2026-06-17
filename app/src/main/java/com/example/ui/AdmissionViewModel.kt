@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.AdmissionDatabase
 import com.example.data.AdmissionRecord
 import com.example.data.AdmissionRepository
+import com.example.data.SupabaseClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -100,8 +101,52 @@ class AdmissionViewModel(application: Application) : AndroidViewModel(applicatio
     private val _isDarkTheme = MutableStateFlow(false)
     val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
 
+    private val _syncStatus = MutableStateFlow("")
+    val syncStatus: StateFlow<String> = _syncStatus.asStateFlow()
+
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+
     fun toggleTheme() {
         _isDarkTheme.value = !_isDarkTheme.value
+    }
+
+    fun syncWithSupabase() {
+        if (!SupabaseClient.isConfigured()) {
+            _syncStatus.value = "Supabase não configurado. Adicione no secrets panel."
+            return
+        }
+        viewModelScope.launch {
+            _isSyncing.value = true
+            _syncStatus.value = "Acessando servidores Supabase..."
+            try {
+                // 1. Upload local data to Supabase
+                val localAdmissions = admissions.value
+                var uploaded = 0
+                for (record in localAdmissions) {
+                    val ok = SupabaseClient.upsertRecord(record)
+                    if (ok) uploaded++
+                }
+
+                // 2. Fetch all admissions from Supabase and write to Room
+                val cloudAdmissions = SupabaseClient.fetchAllRecords()
+                var downloaded = 0
+                for (record in cloudAdmissions) {
+                    repository.insert(record)
+                    downloaded++
+                }
+
+                _syncStatus.value = "Sincronizado! Nuvem: $downloaded | Locais submetidos: $uploaded"
+            } catch (e: Exception) {
+                _syncStatus.value = "Erro ao sincronizar: ${e.message}"
+            } finally {
+                _isSyncing.value = false
+            }
+        }
+    }
+
+    fun clearSyncStatus() {
+        _syncStatus.value = ""
     }
 
     fun navigateToList() {
@@ -131,6 +176,12 @@ class AdmissionViewModel(application: Application) : AndroidViewModel(applicatio
             val recordToSave = _currentRecord.value.copy(timestamp = System.currentTimeMillis())
             val id = repository.insert(recordToSave)
             val savedRecord = recordToSave.copy(id = id)
+            
+            // Sync to Supabase in background
+            viewModelScope.launch {
+                SupabaseClient.upsertRecord(savedRecord)
+            }
+            
             navigateToReportPreview(savedRecord)
         }
     }
@@ -175,6 +226,11 @@ class AdmissionViewModel(application: Application) : AndroidViewModel(applicatio
             val updatedRecord = record.copy(aiInterventionsResult = response)
             repository.insert(updatedRecord) // persist update
             
+            // Sync update to Supabase in background
+            viewModelScope.launch {
+                SupabaseClient.upsertRecord(updatedRecord)
+            }
+            
             // If the record updated is the currently active record, sync it
             if (_currentRecord.value.id == record.id) {
                 _currentRecord.value = updatedRecord
@@ -187,6 +243,12 @@ class AdmissionViewModel(application: Application) : AndroidViewModel(applicatio
     fun deleteRecord(record: AdmissionRecord) {
         viewModelScope.launch {
             repository.delete(record)
+            
+            // Sync delete to Supabase in background
+            viewModelScope.launch {
+                SupabaseClient.deleteRecord(record.id)
+            }
+            
             if (_screenState.value is ScreenState.ReportPreview && 
                 (_screenState.value as ScreenState.ReportPreview).record.id == record.id) {
                 navigateToList()

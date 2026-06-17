@@ -72,6 +72,8 @@ class MainActivity : ComponentActivity() {
 
                     when (val state = screenState) {
                         is ScreenState.List -> {
+                            val syncStatus by viewModel.syncStatus.collectAsStateWithLifecycle()
+                            val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
                             AdmissionListScreen(
                                 admissions = admissions,
                                 isDarkTheme = isDarkTheme,
@@ -79,7 +81,11 @@ class MainActivity : ComponentActivity() {
                                 onAddClick = { viewModel.navigateToNewForm() },
                                 onEditClick = { viewModel.navigateToEditForm(it) },
                                 onDeleteClick = { viewModel.deleteRecord(it) },
-                                onViewClick = { viewModel.navigateToReportPreview(it) }
+                                onViewClick = { viewModel.navigateToReportPreview(it) },
+                                syncStatus = syncStatus,
+                                isSyncing = isSyncing,
+                                onSyncClick = { viewModel.syncWithSupabase() },
+                                onClearSyncStatus = { viewModel.clearSyncStatus() }
                             )
                         }
                         is ScreenState.Form -> {
@@ -286,7 +292,11 @@ fun AdmissionListScreen(
     onAddClick: () -> Unit,
     onEditClick: (AdmissionRecord) -> Unit,
     onDeleteClick: (AdmissionRecord) -> Unit,
-    onViewClick: (AdmissionRecord) -> Unit
+    onViewClick: (AdmissionRecord) -> Unit,
+    syncStatus: String = "",
+    isSyncing: Boolean = false,
+    onSyncClick: () -> Unit = {},
+    onClearSyncStatus: () -> Unit = {}
 ) {
     var searchQuery by remember { mutableStateOf("") }
     val filteredAdmissions = remember(admissions, searchQuery) {
@@ -312,6 +322,27 @@ fun AdmissionListScreen(
                     }
                 },
                 actions = {
+                    // Supabase Cloud Sync Button
+                    IconButton(
+                        onClick = onSyncClick,
+                        enabled = !isSyncing,
+                        modifier = Modifier.testTag("supabase_sync_button")
+                    ) {
+                        if (isSyncing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Sync,
+                                contentDescription = "Sincronizar Cloud",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+
                     IconButton(
                         onClick = onToggleTheme,
                         modifier = Modifier.testTag("toggle_theme_button")
@@ -347,6 +378,51 @@ fun AdmissionListScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
+            if (syncStatus.isNotBlank()) {
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Sync,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = syncStatus,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                        IconButton(
+                            onClick = onClearSyncStatus,
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Fechar aviso",
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
 
             // Search Bar
@@ -1313,7 +1389,7 @@ fun AdmissionFormScreen(
                     placeholder = "Edite a descrição acima ou digite observações adicionais aqui",
                     singleLine = false,
                     testTag = "sistema_locomotor_input",
-                    showMic = false
+                    showMic = true
                 )
 
                 SystemOptionsGrid(
@@ -1335,7 +1411,7 @@ fun AdmissionFormScreen(
                     placeholder = "Edite a descrição acima ou digite observações adicionais aqui",
                     singleLine = false,
                     testTag = "sistema_cardio_input",
-                    showMic = false
+                    showMic = true
                 )
 
                 SystemOptionsGrid(
@@ -1361,7 +1437,7 @@ fun AdmissionFormScreen(
                     placeholder = "Edite a descrição acima ou digite observações adicionais aqui",
                     singleLine = false,
                     testTag = "sistema_resp_input",
-                    showMic = false
+                    showMic = true
                 )
 
                 SystemOptionsGrid(
@@ -1389,7 +1465,7 @@ fun AdmissionFormScreen(
                     placeholder = "Edite a descrição acima ou digite observações adicionais aqui",
                     singleLine = false,
                     testTag = "sistema_neuro_input",
-                    showMic = false
+                    showMic = true
                 )
 
                 Text(
@@ -1530,7 +1606,7 @@ fun AdmissionFormScreen(
                     placeholder = "Especificar jejum, restrições hídricas, etc.",
                     singleLine = false,
                     testTag = "sistema_nutricao_input",
-                    showMic = false
+                    showMic = true
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1693,7 +1769,7 @@ fun AdmissionFormScreen(
                     placeholder = "Edite a descrição acima ou digite observações adicionais aqui",
                     singleLine = false,
                     testTag = "sistema_urinario_input",
-                    showMic = false
+                    showMic = true
                 )
 
                 Text(
@@ -1840,7 +1916,7 @@ fun AdmissionFormScreen(
                     placeholder = "Edite a descrição acima ou digite observações adicionais aqui",
                     singleLine = false,
                     testTag = "sistema_intestinal_input",
-                    showMic = false
+                    showMic = true
                 )
 
                 Text(
@@ -1938,7 +2014,7 @@ fun AdmissionFormScreen(
                     placeholder = "Edite a descrição acima ou digite observações adicionais aqui",
                     singleLine = false,
                     testTag = "sistema_pele_input",
-                    showMic = false
+                    showMic = true
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -2288,7 +2364,7 @@ fun AdmissionFormScreen(
                     placeholder = "Especificar calibres, datas de inserção, drenos, etc.",
                     singleLine = false,
                     testTag = "dispositivos_input",
-                    showMic = false
+                    showMic = true
                 )
             }
 
