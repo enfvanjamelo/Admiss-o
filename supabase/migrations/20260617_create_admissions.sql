@@ -19,6 +19,13 @@ CREATE TABLE IF NOT EXISTS admissions (
     leito TEXT DEFAULT '',
     tipo_cirurgia TEXT DEFAULT '',
     
+    -- Vitals (Sinais Vitais)
+    pressao_arterial TEXT DEFAULT '',
+    frequencia_cardiaca TEXT DEFAULT '',
+    frequencia_respiratoria TEXT DEFAULT '',
+    temperatura TEXT DEFAULT '',
+    saturacao_o2 TEXT DEFAULT '',
+    
     -- 2. Sistemas Orgânicos & Dispositivos (Organ Systems & Devices)
     sistema_locomotor TEXT DEFAULT '',
     sistema_cardiovascular TEXT DEFAULT '',

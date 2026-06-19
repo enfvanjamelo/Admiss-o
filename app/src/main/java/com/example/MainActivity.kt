@@ -5,6 +5,7 @@ import android.content.Intent
 import android.speech.RecognizerIntent
 import android.app.Activity
 import android.net.Uri
+import androidx.core.content.FileProvider
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import java.util.Locale
@@ -373,8 +374,11 @@ fun AdmissionListScreen(
     onLogout: () -> Unit = {},
     loggedInUserName: String = ""
 ) {
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     var searchQuery by remember { mutableStateOf("") }
     var showSupabaseDialog by remember { mutableStateOf(false) }
+    var showQrCodeDialog by remember { mutableStateOf(false) }
 
     val filteredAdmissions = remember(admissions, searchQuery) {
         if (searchQuery.isBlank()) admissions
@@ -399,6 +403,18 @@ fun AdmissionListScreen(
                     }
                 },
                 actions = {
+                    // QR Code Acessar no Celular Button
+                    IconButton(
+                        onClick = { showQrCodeDialog = true },
+                        modifier = Modifier.testTag("access_mobile_qrcode_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.QrCode,
+                            contentDescription = "Acessar no Celular via QR Code",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+
                     // Config Supabase Button
                     IconButton(
                         onClick = { showSupabaseDialog = true },
@@ -563,6 +579,62 @@ fun AdmissionListScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Quick Dashboard Count and Download CSV Button
+            if (filteredAdmissions.isNotEmpty()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(
+                                text = "Total no Banco: ${filteredAdmissions.size}",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "Pronto para sincronização e download",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        
+                        Button(
+                            onClick = { shareDatabaseAsCsv(context, admissions) },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.testTag("download_database_csv_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = "Baixar",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Exportar CSV (Download)",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                    }
+                }
+            }
+
             if (filteredAdmissions.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -704,6 +776,77 @@ fun AdmissionListScreen(
                     onClick = { showSupabaseDialog = false }
                 ) {
                     Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (showQrCodeDialog) {
+        AlertDialog(
+            onDismissRequest = { showQrCodeDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.QrCode,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Acessar no seu Celular",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Escaneie o código QR abaixo com a câmera do seu celular para abrir o aplicativo diretamente na sua mão e usá-lo onde quiser!",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    
+                    Surface(
+                        modifier = Modifier
+                            .size(240.dp)
+                            .border(BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)), RoundedCornerShape(16.dp))
+                            .padding(8.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color.White
+                    ) {
+                        AsyncImage(
+                            model = "https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=https://ais-pre-cngyjunvct337fq3vy76xk-354777519143.us-west1.run.app",
+                            contentDescription = "Código QR do aplicativo para celular",
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString("https://ais-pre-cngyjunvct337fq3vy76xk-354777519143.us-west1.run.app"))
+                            Toast.makeText(context, "Link copiado para a área de transferência!", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.fillMaxWidth().testTag("copy_shared_url_btn")
+                    ) {
+                        Icon(imageVector = Icons.Default.Share, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Copiar Link do App")
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showQrCodeDialog = false },
+                    modifier = Modifier.testTag("close_qrcode_dialog_button")
+                ) {
+                    Text("Concluído")
                 }
             }
         )
@@ -4041,6 +4184,35 @@ fun ReportPreviewScreen(
                 }
             }
 
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Download Report Button
+            Button(
+                onClick = {
+                    shareReportAsFile(context, record)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp)
+                    .testTag("baixar_relatorio_arquivo_botao"),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.tertiary
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Download, 
+                    contentDescription = "Baixar (.txt)",
+                    tint = MaterialTheme.colorScheme.onTertiary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Baixar Relatório Completo (.txt)", 
+                    fontWeight = FontWeight.Bold, 
+                    color = MaterialTheme.colorScheme.onTertiary
+                )
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
@@ -4748,3 +4920,71 @@ fun ForgotPasswordScreen(
         }
     }
 }
+
+fun shareReportAsFile(context: Context, record: com.example.data.AdmissionRecord) {
+    try {
+        val reportContent = record.generateReport()
+        val rawName = record.nome.ifBlank { "SemNome" }
+        // Clean characters for file names
+        val cleanName = rawName.replace(Regex("[^a-zA-Z0-9_]"), "_")
+        val fileName = "Relatorio_Admissao_${cleanName}.txt"
+        val tempFile = java.io.File(context.cacheDir, fileName)
+        tempFile.writeText(reportContent)
+        
+        val fileUri: Uri = FileProvider.getUriForFile(
+            context,
+            "com.example.fileprovider",
+            tempFile
+        )
+        
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "Relatório de Admissão: ${record.nome}")
+            putExtra(Intent.EXTRA_STREAM, fileUri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, "Baixar/Salvar Relatório (.txt)"))
+    } catch (e: Exception) {
+        Toast.makeText(context, "Erro ao gerar arquivo de download: ${e.message}", Toast.LENGTH_LONG).show()
+    }
+}
+
+fun shareDatabaseAsCsv(context: Context, admissions: List<com.example.data.AdmissionRecord>) {
+    try {
+        if (admissions.isEmpty()) {
+            Toast.makeText(context, "Não há dados cadastrados para exportar!", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val csvHeader = "ID,Nome,Idade,Sexo,Prontuario,Enfermaria,Leito,Tipo de Cirurgia,PA,FC,FR,Temperatura,SatO2,Data_Criacao\n"
+        val csvData = admissions.joinToString(separator = "\n") { ad ->
+            val cleanName = ad.nome.replace(",", " ").replace("\n", " ")
+            val cleanCirurgia = ad.tipoCirurgia.replace(",", " ").replace("\n", " ")
+            val cleanEnfermaria = ad.enfermaria.replace(",", " ")
+            val cleanLeito = ad.leito.replace(",", " ")
+            val cleanProntuario = ad.prontuario.replace(",", " ")
+            val formattedDate = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date(ad.timestamp))
+            "${ad.id},\"${cleanName}\",\"${ad.idade}\",\"${ad.sexo}\",\"${cleanProntuario}\",\"${cleanEnfermaria}\",\"${cleanLeito}\",\"${cleanCirurgia}\",\"${ad.pressaoArterial}\",\"${ad.frequenciaCardiaca}\",\"${ad.frequenciaRespiratoria}\",\"${ad.temperatura}\",\"${ad.saturacaoO2}\",\"${formattedDate}\""
+        }
+        val csvContent = csvHeader + csvData
+        
+        val tempFile = java.io.File(context.cacheDir, "Admissoes_Enfermagem_Completo.csv")
+        tempFile.writeText(csvContent)
+        
+        val fileUri: Uri = FileProvider.getUriForFile(
+            context,
+            "com.example.fileprovider",
+            tempFile
+        )
+        
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/csv"
+            putExtra(Intent.EXTRA_SUBJECT, "Banco de Dados de Admissão de Enfermagem (CSV)")
+            putExtra(Intent.EXTRA_STREAM, fileUri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, "Baixar Planilha CSV (Download)"))
+    } catch (e: Exception) {
+        Toast.makeText(context, "Erro ao gerar planilha de download: ${e.message}", Toast.LENGTH_LONG).show()
+    }
+}
+
