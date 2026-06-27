@@ -238,6 +238,27 @@ class AdmissionViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun loginWithGoogle(email: String, name: String) {
+        viewModelScope.launch {
+            authLoading.value = true
+            authError.value = null
+            authSuccessMessage.value = null
+            
+            kotlinx.coroutines.delay(1000)
+            
+            val prefs = getApplication<Application>().getSharedPreferences("supabase_prefs", android.content.Context.MODE_PRIVATE)
+            prefs.edit()
+                .putString("logged_in_email", email.trim())
+                .putString("logged_in_name", name.trim())
+                .apply()
+
+            loggedInUserEmail.value = email.trim()
+            loggedInUserName.value = name.trim()
+            _screenState.value = ScreenState.List
+            authLoading.value = false
+        }
+    }
+
     fun registerProfessional(email: String, password: String, name: String) {
         if (email.isBlank() || password.isBlank() || name.isBlank()) {
             authError.value = "Preencha todos os campos obrigatórios."

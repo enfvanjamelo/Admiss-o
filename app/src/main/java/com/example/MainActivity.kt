@@ -52,6 +52,10 @@ import com.example.ui.AdmissionViewModel
 import com.example.ui.ScreenState
 import com.example.ui.theme.MyApplicationTheme
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.Canvas
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.animateFloat
@@ -77,16 +81,16 @@ class MainActivity : ComponentActivity() {
                             if (isDarkTheme) {
                                 Brush.verticalGradient(
                                     colors = listOf(
-                                        Color(0xFF080B11), // Absolute deep cosmic midnight black
-                                        Color(0xFF130E26), // Deep cyber neon purple backing
-                                        Color(0xFF0C1324)  // Deep neon cyan bio-luminescent backing
+                                        Color(0xFF2B0925), // Very deep plum/purple background
+                                        Color(0xFF4F1B46), // Deep Plum / Dark Purple
+                                        Color(0xFF381031)  // Mid-tone deep plum
                                     )
                                 )
                             } else {
                                 Brush.verticalGradient(
                                     colors = listOf(
-                                        Color(0xFFF4F7FC), // Holographic light backing
-                                        Color(0xFFE6F3FB)  // Light cyan wash
+                                        Color(0xFFFBE7C6), // Cream background
+                                        Color(0xFFFFECE6)  // Soft light rose wash
                                     )
                                 )
                             }
@@ -108,6 +112,7 @@ class MainActivity : ComponentActivity() {
                                 successMessage = authSuccessMessage,
                                 loading = authLoading,
                                 onLogin = { email, password -> viewModel.loginProfessional(email, password) },
+                                onLoginWithGoogle = { email, name -> viewModel.loginWithGoogle(email, name) },
                                 onNavigateToRegister = { viewModel.navigateToRegister() },
                                 onNavigateToForgotPassword = { viewModel.navigateToForgotPassword() }
                             )
@@ -894,7 +899,7 @@ fun PatientAdmissionCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val isDark = MaterialTheme.colorScheme.primary == Color(0xFF7E6FFF)
+    val isDark = MaterialTheme.colorScheme.primary == Color(0xFFA80359)
     val shape = RoundedCornerShape(20.dp)
     Card(
         modifier = Modifier
@@ -1046,7 +1051,7 @@ fun FormSectionCard(
     content: @Composable () -> Unit
 ) {
     val isExpanded = sectionIndex == expandedIndex
-    val isDark = MaterialTheme.colorScheme.primary == Color(0xFF7E6FFF)
+    val isDark = MaterialTheme.colorScheme.primary == Color(0xFFA80359)
     val shape = RoundedCornerShape(16.dp)
 
     Card(
@@ -1612,6 +1617,25 @@ fun FormTextField(
         }
     }
 
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
+                putExtra(RecognizerIntent.EXTRA_PROMPT, "Fale agora em português brasileiro...")
+            }
+            try {
+                voiceLauncher.launch(intent)
+            } catch (e: Exception) {
+                showSimulatedMicDialog = true
+            }
+        } else {
+            Toast.makeText(context, "Permissão de microfone necessária para transcrição de áudio.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     if (showSimulatedMicDialog) {
         SimulatedSpeechDialog(
             label = label,
@@ -1644,18 +1668,24 @@ fun FormTextField(
             {
                 IconButton(
                     onClick = {
-                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
-                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "pt-BR")
-                            putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, true)
-                            putExtra(RecognizerIntent.EXTRA_PROMPT, "Fale agora em português brasileiro...")
-                        }
-                        try {
-                            voiceLauncher.launch(intent)
-                        } catch (e: Exception) {
-                            // Automatically fall back to the beautiful clinical simulated dictation dialog
-                            showSimulatedMicDialog = true
+                        val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                            context,
+                            android.Manifest.permission.RECORD_AUDIO
+                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+                        if (hasPermission) {
+                            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
+                                putExtra(RecognizerIntent.EXTRA_PROMPT, "Fale agora em português brasileiro...")
+                            }
+                            try {
+                                voiceLauncher.launch(intent)
+                            } catch (e: Exception) {
+                                showSimulatedMicDialog = true
+                            }
+                        } else {
+                            permissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
                         }
                     }
                 ) {
@@ -1679,7 +1709,7 @@ fun ScaleScoreCard(
     color: Color,
     content: @Composable () -> Unit
 ) {
-    val isDark = MaterialTheme.colorScheme.primary == Color(0xFF7E6FFF)
+    val isDark = MaterialTheme.colorScheme.primary == Color(0xFFA80359)
     val shape = RoundedCornerShape(16.dp)
     Card(
         modifier = Modifier
@@ -1747,7 +1777,7 @@ fun ScaleItemSelector(
     var expanded by remember { mutableStateOf(false) }
     val selectedOption = options.find { it.first == selectedValue } ?: options.first()
 
-    val isDark = MaterialTheme.colorScheme.primary == Color(0xFF7E6FFF)
+    val isDark = MaterialTheme.colorScheme.primary == Color(0xFFA80359)
     val cardShape = RoundedCornerShape(14.dp)
     Card(
         modifier = Modifier
@@ -2070,6 +2100,95 @@ fun AdmissionFormScreen(
                     showMic = true,
                     testTag = "saturacao_o2_input"
                 )
+
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                Text(
+                    text = "Dados Antropométricos",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        FormTextField(
+                            value = record.altura,
+                            onValueChange = { new -> onUpdateRecord { it.copy(altura = new) } },
+                            label = "Altura",
+                            placeholder = "Ex. 1.75 ou 175",
+                            showMic = true,
+                            testTag = "altura_input"
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f)) {
+                        FormTextField(
+                            value = record.peso,
+                            onValueChange = { new -> onUpdateRecord { it.copy(peso = new) } },
+                            label = "Peso (kg)",
+                            placeholder = "Ex. 70.5",
+                            showMic = true,
+                            testTag = "peso_input"
+                        )
+                    }
+                }
+
+                val imc = record.imcValue()
+                if (imc != null) {
+                    val classification = record.imcClassification()
+                    val imcColor = when {
+                        classification.contains("Normal") -> MaterialTheme.colorScheme.primary
+                        classification.contains("Sobrepeso") -> MaterialTheme.colorScheme.secondary
+                        else -> MaterialTheme.colorScheme.error
+                    }
+
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = imcColor.copy(alpha = 0.1f)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    text = "IMC Calculado",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = String.format("%.2f kg/m²", imc),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = imcColor
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = "Classificação",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = classification,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = imcColor
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             // Card 2: Sistemas Orgânicos & Dispositivos
@@ -2239,11 +2358,18 @@ fun AdmissionFormScreen(
                 )
 
                 val dietOptionsList = listOf(
+                    "Geral",
+                    "Branda",
+                    "Pastosa",
                     "Líquida restrita",
                     "Líquida completa",
-                    "Pastosa",
-                    "Branda",
-                    "Geral"
+                    "HAS",
+                    "DM 2",
+                    "DLP",
+                    "DRC",
+                    "laxativa",
+                    "hipolipídica hipossodica",
+                    "hipercalórico"
                 )
 
                 val selectedDiets = dietOptionsList.filter { option ->
@@ -2739,7 +2865,7 @@ fun AdmissionFormScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Planimetria & Foto Canvas
-                val isDarkPlani = MaterialTheme.colorScheme.primary == Color(0xFF7E6FFF)
+                val isDarkPlani = MaterialTheme.colorScheme.primary == Color(0xFFA80359)
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -3038,53 +3164,299 @@ fun AdmissionFormScreen(
                     modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
                 )
 
-                val deviceOptionsList = listOf(
-                    "Acesso periférico em membro superior direito",
-                    "Acesso periférico em membro superior esquerdo",
-                    "Acesso central jugular direita",
-                    "Acesso central jugular esquerda",
-                    "Acesso central subclávia direita",
-                    "Acesso central subclávia esquerda",
-                    "Acesso central femoral direita",
-                    "Acesso central femoral esquerda",
-                    "Cateter de diálise",
-                    "FAV"
-                )
-
-                val selectedDevices = deviceOptionsList.filter { option ->
-                    record.dispositivos.split(",").any { it.trim().equals(option, ignoreCase = true) }
-                }
+                val dispositivosList = record.getDispositivosList()
 
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
                         .padding(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    deviceOptionsList.forEachIndexed { idx, opt ->
-                        val isChecked = selectedDevices.contains(opt)
-                        Row(
+                    dispositivosList.forEachIndexed { index, device ->
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(4.dp))
-                                .clickable {
-                                    val newValue = toggleSystemOption(record.dispositivos, opt)
-                                    onUpdateRecord { it.copy(dispositivos = newValue) }
-                                }
-                                .padding(vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .background(
+                                    if (device.selecionado) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f) else androidx.compose.ui.graphics.Color.Transparent,
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .padding(8.dp)
                         ) {
-                            Checkbox(
-                                checked = isChecked,
-                                onCheckedChange = {
-                                    val newValue = toggleSystemOption(record.dispositivos, opt)
-                                    onUpdateRecord { it.copy(dispositivos = newValue) }
-                                },
-                                modifier = Modifier.testTag("device_check_$idx")
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(opt, style = MaterialTheme.typography.bodySmall)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val newList = dispositivosList.toMutableList()
+                                        newList[index] = device.copy(selecionado = !device.selecionado)
+                                        onUpdateRecord { it.withUpdatedDispositivos(newList) }
+                                    },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = device.selecionado,
+                                    onCheckedChange = { checked ->
+                                        val newList = dispositivosList.toMutableList()
+                                        newList[index] = device.copy(selecionado = checked ?: false)
+                                        onUpdateRecord { it.withUpdatedDispositivos(newList) }
+                                    },
+                                    modifier = Modifier.testTag("device_check_${device.tipo}")
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = when (device.tipo) {
+                                        "AVP" -> "AVP (Acesso Venoso Periférico)"
+                                        "CVC" -> "CVC (Acesso Venoso Central)"
+                                        "FAV MS" -> "FAV MS (Fístula Arteriovenosa em Membro Superior)"
+                                        "CAT HD" -> "CAT HD (Cateter de Hemodiálise)"
+                                        else -> device.tipo
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (device.selecionado) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+
+                            if (device.selecionado) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    when (device.tipo) {
+                                        "AVP" -> {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = "Lado:",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                                listOf("D", "E").forEach { ladoOpt ->
+                                                    val isSelected = device.lado == ladoOpt
+                                                    FilterChip(
+                                                        selected = isSelected,
+                                                        onClick = {
+                                                            val newList = dispositivosList.toMutableList()
+                                                            newList[index] = device.copy(lado = if (isSelected) "" else ladoOpt)
+                                                            onUpdateRecord { it.withUpdatedDispositivos(newList) }
+                                                        },
+                                                        label = { Text(ladoOpt) },
+                                                        colors = FilterChipDefaults.filterChipColors(
+                                                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                                        ),
+                                                        modifier = Modifier.testTag("device_side_${device.tipo}_$ladoOpt")
+                                                    )
+                                                }
+                                            }
+
+                                            OutlinedTextField(
+                                                value = device.dataPuncao,
+                                                onValueChange = { valNew ->
+                                                    val newList = dispositivosList.toMutableList()
+                                                    newList[index] = device.copy(dataPuncao = valNew)
+                                                    onUpdateRecord { it.withUpdatedDispositivos(newList) }
+                                                },
+                                                label = { Text("Data de Punção (____/____/____)", style = MaterialTheme.typography.bodySmall) },
+                                                placeholder = { Text("Ex: DD/MM/AAAA", style = MaterialTheme.typography.bodySmall) },
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.fillMaxWidth().testTag("device_puncao_${device.tipo}")
+                                            )
+                                        }
+
+                                        "CVC" -> {
+                                            Text(
+                                                text = "Sítio de Inserção:",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                    listOf("VJD", "VJE", "VSCD").forEach { siteOpt ->
+                                                        val isSelected = device.lado == siteOpt
+                                                        FilterChip(
+                                                            selected = isSelected,
+                                                            onClick = {
+                                                                val newList = dispositivosList.toMutableList()
+                                                                newList[index] = device.copy(lado = if (isSelected) "" else siteOpt)
+                                                                onUpdateRecord { it.withUpdatedDispositivos(newList) }
+                                                            },
+                                                            label = { Text(siteOpt) },
+                                                            colors = FilterChipDefaults.filterChipColors(
+                                                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                                            ),
+                                                            modifier = Modifier.testTag("device_side_${device.tipo}_$siteOpt")
+                                                        )
+                                                    }
+                                                }
+                                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                    listOf("VSCE", "VFD", "VFE").forEach { siteOpt ->
+                                                        val isSelected = device.lado == siteOpt
+                                                        FilterChip(
+                                                            selected = isSelected,
+                                                            onClick = {
+                                                                val newList = dispositivosList.toMutableList()
+                                                                newList[index] = device.copy(lado = if (isSelected) "" else siteOpt)
+                                                                onUpdateRecord { it.withUpdatedDispositivos(newList) }
+                                                            },
+                                                            label = { Text(siteOpt) },
+                                                            colors = FilterChipDefaults.filterChipColors(
+                                                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                                            ),
+                                                            modifier = Modifier.testTag("device_side_${device.tipo}_$siteOpt")
+                                                        )
+                                                    }
+                                                }
+                                            }
+
+                                            OutlinedTextField(
+                                                value = device.dataPuncao,
+                                                onValueChange = { valNew ->
+                                                    val newList = dispositivosList.toMutableList()
+                                                    newList[index] = device.copy(dataPuncao = valNew)
+                                                    onUpdateRecord { it.withUpdatedDispositivos(newList) }
+                                                },
+                                                label = { Text("Data de Punção (____/____/____)", style = MaterialTheme.typography.bodySmall) },
+                                                placeholder = { Text("Ex: DD/MM/AAAA", style = MaterialTheme.typography.bodySmall) },
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.fillMaxWidth().testTag("device_puncao_${device.tipo}")
+                                            )
+
+                                            Text(
+                                                text = "Tipo de Curativo:",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            val dressingTypes = listOf("Curativo Convencional", "Filme Transparente")
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                dressingTypes.forEach { dressOpt ->
+                                                    val isSelected = device.curativoTipo == dressOpt
+                                                    FilterChip(
+                                                        selected = isSelected,
+                                                        onClick = {
+                                                            val newList = dispositivosList.toMutableList()
+                                                            newList[index] = device.copy(curativoTipo = if (isSelected) "" else dressOpt)
+                                                            onUpdateRecord { it.withUpdatedDispositivos(newList) }
+                                                        },
+                                                        label = { Text(dressOpt) },
+                                                        colors = FilterChipDefaults.filterChipColors(
+                                                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                                        ),
+                                                        modifier = Modifier.testTag("device_dress_${device.tipo}_$dressOpt")
+                                                    )
+                                                }
+                                            }
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Box(modifier = Modifier.weight(1f)) {
+                                                    OutlinedTextField(
+                                                        value = device.dataTroca,
+                                                        onValueChange = { valNew ->
+                                                            val newList = dispositivosList.toMutableList()
+                                                            newList[index] = device.copy(dataTroca = valNew)
+                                                            onUpdateRecord { it.withUpdatedDispositivos(newList) }
+                                                        },
+                                                        label = { Text("Troca (___/___/___)", style = MaterialTheme.typography.bodySmall) },
+                                                        placeholder = { Text("Ex: DD/MM/AAAA", style = MaterialTheme.typography.bodySmall) },
+                                                        singleLine = true,
+                                                        textStyle = MaterialTheme.typography.bodySmall,
+                                                        modifier = Modifier.fillMaxWidth().testTag("device_troca_${device.tipo}")
+                                                    )
+                                                }
+                                                Box(modifier = Modifier.weight(1f)) {
+                                                    OutlinedTextField(
+                                                        value = device.dataRetirada,
+                                                        onValueChange = { valNew ->
+                                                            val newList = dispositivosList.toMutableList()
+                                                            newList[index] = device.copy(dataRetirada = valNew)
+                                                            onUpdateRecord { it.withUpdatedDispositivos(newList) }
+                                                        },
+                                                        label = { Text("Retirada (___/___/___)", style = MaterialTheme.typography.bodySmall) },
+                                                        placeholder = { Text("Ex: DD/MM/AAAA", style = MaterialTheme.typography.bodySmall) },
+                                                        singleLine = true,
+                                                        textStyle = MaterialTheme.typography.bodySmall,
+                                                        modifier = Modifier.fillMaxWidth().testTag("device_retirada_${device.tipo}")
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        "FAV MS" -> {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = "Lado do Membro Superior:",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                                listOf("D", "E").forEach { ladoOpt ->
+                                                    val isSelected = device.lado == ladoOpt
+                                                    FilterChip(
+                                                        selected = isSelected,
+                                                        onClick = {
+                                                            val newList = dispositivosList.toMutableList()
+                                                            newList[index] = device.copy(lado = if (isSelected) "" else ladoOpt)
+                                                            onUpdateRecord { it.withUpdatedDispositivos(newList) }
+                                                        },
+                                                        label = { Text(ladoOpt) },
+                                                        colors = FilterChipDefaults.filterChipColors(
+                                                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                                        ),
+                                                        modifier = Modifier.testTag("device_side_${device.tipo}_$ladoOpt")
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        "CAT HD" -> {
+                                            Text(
+                                                text = "Sítio de Inserção:",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            val cathdSites = listOf("VJ D", "VJ E", "VSC D", "VSC E")
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                cathdSites.forEach { siteOpt ->
+                                                    val isSelected = device.lado == siteOpt
+                                                    FilterChip(
+                                                        selected = isSelected,
+                                                        onClick = {
+                                                            val newList = dispositivosList.toMutableList()
+                                                            newList[index] = device.copy(lado = if (isSelected) "" else siteOpt)
+                                                            onUpdateRecord { it.withUpdatedDispositivos(newList) }
+                                                        },
+                                                        label = { Text(siteOpt) },
+                                                        colors = FilterChipDefaults.filterChipColors(
+                                                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                                        ),
+                                                        modifier = Modifier.testTag("device_side_${device.tipo}_$siteOpt")
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -3094,12 +3466,151 @@ fun AdmissionFormScreen(
                 FormTextField(
                     value = record.dispositivos,
                     onValueChange = { new -> onUpdateRecord { it.copy(dispositivos = new) } },
-                    label = "Outros Dispositivos / Detalhes dos Acessos",
+                    label = "Outros Dispositivos",
                     placeholder = "Especificar calibres, datas de inserção, drenos, etc.",
                     singleLine = false,
                     testTag = "dispositivos_input",
                     showMic = true
                 )
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                Text(
+                    text = "Drenos Ativos",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+
+                val drenosList = record.getDrenosList()
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                        .padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    drenosList.forEachIndexed { index, dreno ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    if (dreno.selecionado) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f) else androidx.compose.ui.graphics.Color.Transparent,
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .padding(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val newList = drenosList.toMutableList()
+                                        newList[index] = dreno.copy(selecionado = !dreno.selecionado)
+                                        onUpdateRecord { it.withUpdatedDrenos(newList) }
+                                    },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = dreno.selecionado,
+                                    onCheckedChange = { checked ->
+                                        val newList = drenosList.toMutableList()
+                                        newList[index] = dreno.copy(selecionado = checked ?: false)
+                                        onUpdateRecord { it.withUpdatedDrenos(newList) }
+                                    },
+                                    modifier = Modifier.testTag("dreno_check_$index")
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = dreno.tipo,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (dreno.selecionado) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+
+                            if (dreno.selecionado) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // Side Selector (D or E) - only for those that support side
+                                    val supportsSide = dreno.tipo != "Mediastino" && dreno.tipo != "Outros"
+                                    if (supportsSide) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text(
+                                                text = "Lado do Dreno:",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            listOf("D", "E").forEach { ladoOpt ->
+                                                val isLadoSelected = dreno.lado == ladoOpt
+                                                FilterChip(
+                                                    selected = isLadoSelected,
+                                                    onClick = {
+                                                        val newList = drenosList.toMutableList()
+                                                        newList[index] = dreno.copy(lado = if (isLadoSelected) "" else ladoOpt)
+                                                        onUpdateRecord { it.withUpdatedDrenos(newList) }
+                                                    },
+                                                    label = { Text(ladoOpt) },
+                                                    colors = FilterChipDefaults.filterChipColors(
+                                                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                                    ),
+                                                    modifier = Modifier.testTag("dreno_side_${index}_$ladoOpt")
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // Débito and Aspecto inputs
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            OutlinedTextField(
+                                                value = dreno.debito,
+                                                onValueChange = { valNew ->
+                                                    val newList = drenosList.toMutableList()
+                                                    newList[index] = dreno.copy(debito = valNew)
+                                                    onUpdateRecord { it.withUpdatedDrenos(newList) }
+                                                },
+                                                label = { Text("Débito", style = MaterialTheme.typography.bodySmall) },
+                                                placeholder = { Text("Ex: 150ml", style = MaterialTheme.typography.bodySmall) },
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.fillMaxWidth().testTag("dreno_debito_$index")
+                                            )
+                                        }
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            OutlinedTextField(
+                                                value = dreno.aspecto,
+                                                onValueChange = { valNew ->
+                                                    val newList = drenosList.toMutableList()
+                                                    newList[index] = dreno.copy(aspecto = valNew)
+                                                    onUpdateRecord { it.withUpdatedDrenos(newList) }
+                                                },
+                                                label = { Text("Aspecto", style = MaterialTheme.typography.bodySmall) },
+                                                placeholder = { Text("Ex: seroso, hemático", style = MaterialTheme.typography.bodySmall) },
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.fillMaxWidth().testTag("dreno_aspecto_$index")
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // Card 3: Histórico Clínico & Alergias
@@ -3117,10 +3628,10 @@ fun AdmissionFormScreen(
                     singleLine = false
                 )
                 FormTextField(
-                    value = record.condicoesAnteriores,
-                    onValueChange = { new -> onUpdateRecord { it.copy(condicoesAnteriores = new) } },
-                    label = "Condições Anteriores",
-                    placeholder = "Ex. Gestante, Tabagista, Obesidade, Imunossuprimido",
+                    value = record.historiaDoencaAtual,
+                    onValueChange = { new -> onUpdateRecord { it.copy(historiaDoencaAtual = new) } },
+                    label = "História da Doença Atual (HDA)",
+                    placeholder = "Descreva o histórico, início dos sintomas e evolução clínica do paciente",
                     singleLine = false
                 )
                 FormTextField(
@@ -4057,7 +4568,7 @@ fun ReportPreviewScreen(
                 }
             }
 
-            val isDarkRpt = MaterialTheme.colorScheme.primary == Color(0xFF7E6FFF)
+            val isDarkRpt = MaterialTheme.colorScheme.primary == Color(0xFFA80359)
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -4390,6 +4901,57 @@ fun BrandedAppLogo(modifier: Modifier = Modifier) {
     }
 }
 
+val GoogleGLogo: ImageVector
+    get() = ImageVector.Builder(
+        name = "GoogleGLogo",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = androidx.compose.ui.graphics.SolidColor(Color(0xFFEA4335))) { // Red
+            moveTo(12.0f, 5.04f)
+            curveTo(13.86f, 5.04f, 15.53f, 5.68f, 16.85f, 6.94f)
+            lineTo(20.3f, 3.49f)
+            curveTo(18.2f, 1.54f, 15.38f, 0.35f, 12.0f, 0.35f)
+            curveTo(7.35f, 0.35f, 3.34f, 3.02f, 1.4f, 6.91f)
+            lineTo(5.17f, 9.83f)
+            curveTo(6.06f, 7.04f, 8.81f, 5.04f, 12.0f, 5.04f)
+            close()
+        }
+        path(fill = androidx.compose.ui.graphics.SolidColor(Color(0xFF4285F4))) { // Blue
+            moveTo(23.49f, 12.27f)
+            curveTo(23.49f, 11.48f, 23.42f, 10.73f, 23.3f, 10.0f)
+            lineTo(12.0f, 10.0f)
+            lineTo(12.0f, 14.51f)
+            lineTo(18.47f, 14.51f)
+            curveTo(18.19f, 15.99f, 17.34f, 17.24f, 16.08f, 18.09f)
+            lineTo(19.85f, 21.01f)
+            curveTo(22.06f, 18.97f, 23.49f, 15.91f, 23.49f, 12.27f)
+            close()
+        }
+        path(fill = androidx.compose.ui.graphics.SolidColor(Color(0xFF34A853))) { // Green
+            moveTo(12.0f, 23.65f)
+            curveTo(15.14f, 23.65f, 17.77f, 22.61f, 19.85f, 21.01f)
+            lineTo(16.08f, 18.09f)
+            curveTo(15.01f, 18.81f, 13.62f, 19.25f, 12.0f, 19.25f)
+            curveTo(8.81f, 19.25f, 6.06f, 17.25f, 5.17f, 14.46f)
+            lineTo(1.4f, 17.38f)
+            curveTo(3.34f, 21.27f, 7.35f, 23.65f, 12.0f, 23.65f)
+            close()
+        }
+        path(fill = androidx.compose.ui.graphics.SolidColor(Color(0xFFFBBC05))) { // Yellow
+            moveTo(5.17f, 14.46f)
+            curveTo(4.94f, 13.76f, 4.81f, 13.02f, 4.81f, 12.25f)
+            curveTo(4.81f, 11.48f, 4.94f, 10.74f, 5.17f, 10.04f)
+            lineTo(1.4f, 7.12f)
+            curveTo(0.51f, 8.9f, 0.0f, 10.89f, 0.0f, 13.0f)
+            curveTo(0.0f, 15.11f, 0.51f, 17.1f, 1.4f, 18.88f)
+            lineTo(5.17f, 14.46f)
+            close()
+        }
+    }.build()
+
 /**
  * Sleek, highly secure Professional Login Screen
  */
@@ -4400,12 +4962,14 @@ fun LoginScreen(
     successMessage: String?,
     loading: Boolean,
     onLogin: (String, String) -> Unit,
+    onLoginWithGoogle: (String, String) -> Unit,
     onNavigateToRegister: () -> Unit,
     onNavigateToForgotPassword: () -> Unit
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var showGoogleChooser by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -4573,6 +5137,49 @@ fun LoginScreen(
                     }
                 }
 
+                // Or Divider
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(modifier = Modifier.weight(1f).height(1.dp).background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)))
+                    Text("ou", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                    Box(modifier = Modifier.weight(1f).height(1.dp).background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)))
+                }
+
+                // Beautiful Google-branded Sign-In Button
+                OutlinedButton(
+                    onClick = { showGoogleChooser = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .testTag("google_login_button"),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (isDarkTheme) Color(0xFF131F33) else Color.White
+                    ),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = if (isDarkTheme) MaterialTheme.colorScheme.outline.copy(alpha = 0.3f) else Color(0xFFDADCE0)
+                    ),
+                    enabled = !loading
+                ) {
+                    Icon(
+                        imageVector = GoogleGLogo,
+                        contentDescription = null,
+                        tint = Color.Unspecified,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Entrar com o Google",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = if (isDarkTheme) Color.White else Color(0xFF3C4043)
+                    )
+                }
+
                 // Bottom alternate router indicator
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -4593,6 +5200,145 @@ fun LoginScreen(
                             .clickable { onNavigateToRegister() }
                             .padding(vertical = 4.dp)
                             .testTag("navigate_register_link")
+                    )
+                }
+            }
+        }
+    }
+
+    if (showGoogleChooser) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showGoogleChooser = false }
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .widthIn(max = 400.dp),
+                shape = RoundedCornerShape(24.dp),
+                color = if (isDarkTheme) Color(0xFF1E1420) else Color.White,
+                tonalElevation = 6.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = GoogleGLogo,
+                        contentDescription = "Google Logo",
+                        tint = Color.Unspecified,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Fazer login com o Google",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDarkTheme) Color.White else Color(0xFF202124),
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "para continuar no app Admissão Cirúrgica",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isDarkTheme) Color.LightGray else Color(0xFF5F6368),
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    val accounts = listOf(
+                        Pair("Enfª. Vanja Melo", "enf.vanja.melo@gmail.com"),
+                        Pair("Dr. Alexandre Silva", "dr.silva@hospital.com")
+                    )
+
+                    accounts.forEach { (name, emailStr) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    showGoogleChooser = false
+                                    onLoginWithGoogle(emailStr, name)
+                                }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(
+                                        if (emailStr == "enf.vanja.melo@gmail.com") Color(0xFFB23A48) else Color(0xFF52254F),
+                                        CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = name.substringBefore(" ").take(1) + (name.split(" ").getOrNull(1)?.take(1) ?: ""),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column {
+                                Text(
+                                    text = name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (isDarkTheme) Color.White else Color(0xFF3C4043)
+                                )
+                                Text(
+                                    text = emailStr,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (isDarkTheme) Color.LightGray else Color(0xFF5F6368)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                showGoogleChooser = false
+                                onLoginWithGoogle("enfermeiro.plantao@hospital.com", "Enfermeiro de Plantão")
+                            }
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .border(1.dp, if (isDarkTheme) Color.Gray else Color(0xFFDADCE0), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = null,
+                                tint = if (isDarkTheme) Color.LightGray else Color(0xFF5F6368)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text(
+                            text = "Usar outra conta",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = if (isDarkTheme) Color.White else Color(0xFF3C4043)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        text = "Para continuar, o Google compartilhará seu nome, endereço de e-mail e foto do perfil com o aplicativo Admissão Cirúrgica.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (isDarkTheme) Color.LightGray.copy(alpha = 0.7f) else Color(0xFF70757A),
+                        textAlign = TextAlign.Center,
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp
                     )
                 }
             }

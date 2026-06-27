@@ -3,59 +3,59 @@ package com.example.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // ==========================================
-// FUTURISTIC LIGHT CYBER-CLINICAL PALETTE
+// CUSTOMIZED RUST-AND-ROSE / PLUM-MAGENTA-CRIMSON PALETTE
 // ==========================================
-val ClinicalPrimary = Color(0xFF4D3DF2) // Energized Electric-Indigo Blue
+
+// LIGHT THEME (Rust-and-Rose)
+val ClinicalPrimary = Color(0xFFB23A48) // Deep Rose / Rust Red
 val ClinicalOnPrimary = Color(0xFFFFFFFF)
-val ClinicalPrimaryContainer = Color(0xFFEEF0FF) // Cyber blue glow soft backing
-val ClinicalOnPrimaryContainer = Color(0xFF0F0052)
+val ClinicalPrimaryContainer = Color(0xFFFFF0EE) // Soft rose wash
+val ClinicalOnPrimaryContainer = Color(0xFF6E2C2C) // Dark Burgundy
 
-val ClinicalSecondary = Color(0xFF00A2E2) // Vibrant Neon Luminous Cyan
+val ClinicalSecondary = Color(0xFFC85C5C) // Lighter Rose
 val ClinicalOnSecondary = Color(0xFFFFFFFF)
-val ClinicalSecondaryContainer = Color(0xFFE0F6FF) // Glowing soft-cyan mineral container
-val ClinicalOnSecondaryContainer = Color(0xFF001F31)
+val ClinicalSecondaryContainer = Color(0xFFFFDAD9) // Soft pink wash
+val ClinicalOnSecondaryContainer = Color(0xFF3E1212)
 
-val ClinicalTertiary = Color(0xFFFF2E93) // Electric Cyber-Magenta Active Accent
+val ClinicalTertiary = Color(0xFFE8876C) // Rust Orange/Peach
 val ClinicalOnTertiary = Color(0xFFFFFFFF)
-val ClinicalTertiaryContainer = Color(0xFFFFEBF3)
-val ClinicalOnTertiaryContainer = Color(0xFF42001F)
+val ClinicalTertiaryContainer = Color(0xFFFFECE6)
+val ClinicalOnTertiaryContainer = Color(0xFF5C1E0D)
 
-val ClinicalBackground = Color(0xFFF4F7FC) // Icy holographic cyber clinical background
-val ClinicalOnBackground = Color(0xFF0C101B) // Ultra dark purple-slate high readability
-val ClinicalSurface = Color(0xFFFFFFFF) // High polished frosty white
-val ClinicalOnSurface = Color(0xFF0C101B)
+val ClinicalBackground = Color(0xFFFBE7C6) // Light cream/sand background
+val ClinicalOnBackground = Color(0xFF6E2C2C) // Deep Burgundy text
+val ClinicalSurface = Color(0xFFFFFDF8) // Warm off-white surface
+val ClinicalOnSurface = Color(0xFF6E2C2C)
 
-val ClinicalSurfaceVariant = Color(0xFFE1E6F3) // Modern subtle glowing outline/border backing
-val ClinicalOnSurfaceVariant = Color(0xFF2C324E)
+val ClinicalSurfaceVariant = Color(0xFFF7DFB8) // Warm sand/cream surface variant
+val ClinicalOnSurfaceVariant = Color(0xFF6E2C2C)
 
-val ClinicalOutline = Color(0xFF5D6582) // Futuristic tech line outlining
-val ClinicalOutlineVariant = Color(0xFFCBD2E6)
+val ClinicalOutline = Color(0xFFC85C5C)
+val ClinicalOutlineVariant = Color(0xFFE8876C)
 
-// ==========================================
-// ULTRA-MODERN DARK SCI-FI MEDICAL PALETTE
-// ==========================================
-val ClinicalDarkPrimary = Color(0xFF7E6FFF) // Brightened Quantum-Violet Laser
-val ClinicalDarkOnPrimary = Color(0xFF080B11)
-val ClinicalDarkPrimaryContainer = Color(0xFF1E1C44) // Deep starlight cosmic purple glow
-val ClinicalDarkOnPrimaryContainer = Color(0xFFE1DDFF)
+// DARK THEME (Plum-Magenta-Crimson)
+val ClinicalDarkPrimary = Color(0xFFA80359) // Bright Magenta / Violet Rose
+val ClinicalDarkOnPrimary = Color(0xFFFFFFFF)
+val ClinicalDarkPrimaryContainer = Color(0xFF6B0D47) // Burgundy Plum / Deep Magenta
+val ClinicalDarkOnPrimaryContainer = Color(0xFFFFD9E2)
 
-val ClinicalDarkSecondary = Color(0xFF00E5FF) // Holograms Bright Teal Cyber-Cyan
-val ClinicalDarkOnSecondary = Color(0xFF080B11)
-val ClinicalDarkSecondaryContainer = Color(0xFF002B35) // Deep ocean bioluminescent outline
-val ClinicalDarkOnSecondaryContainer = Color(0xFFB2F5FF)
+val ClinicalDarkSecondary = Color(0xFF870C3D) // Crimson / Deep Rose
+val ClinicalDarkOnSecondary = Color(0xFFFFFFFF)
+val ClinicalDarkSecondaryContainer = Color(0xFF4F1B46) // Deep Plum / Dark Purple
+val ClinicalDarkOnSecondaryContainer = Color(0xFFFFD9E2)
 
-val ClinicalDarkTertiary = Color(0xFFFF49AC) // Cyber Punk Hot Pink Glow
-val ClinicalDarkOnTertiary = Color(0xFF080B11)
-val ClinicalDarkTertiaryContainer = Color(0xFF4C0E31) // Sub-dermal laser heat mapping
-val ClinicalDarkOnTertiaryContainer = Color(0xFFFFD1E9)
+val ClinicalDarkTertiary = Color(0xFF52254F) // Mid Plum / Violet Charcoal
+val ClinicalDarkOnTertiary = Color(0xFFFFFFFF)
+val ClinicalDarkTertiaryContainer = Color(0xFF6B0D47)
+val ClinicalDarkOnTertiaryContainer = Color(0xFFFFD9E4)
 
-val ClinicalDarkBackground = Color(0xFF080B11) // Absolute deep cosmic midnight black
-val ClinicalDarkOnBackground = Color(0xFFECEFF4) // Luminous highcontrast surgical white
-val ClinicalDarkSurface = Color(0xFF101625) // Glowing cockpit acrylic dashboard glass
-val ClinicalDarkOnSurface = Color(0xFFECEFF4)
+val ClinicalDarkBackground = Color(0xFF2B0925) // Very deep plum/purple background
+val ClinicalDarkOnBackground = Color(0xFFFFD9E2)
+val ClinicalDarkSurface = Color(0xFF4F1B46) // Deep Plum
+val ClinicalDarkOnSurface = Color(0xFFFFF0F3)
 
-val ClinicalDarkSurfaceVariant = Color(0xFF1C243B) // Dark neon structural backplane
-val ClinicalDarkOnSurfaceVariant = Color(0xFFA5B2D1)
+val ClinicalDarkSurfaceVariant = Color(0xFF52254F) // Mid Plum
+val ClinicalDarkOnSurfaceVariant = Color(0xFFFFD9E2)
 
-val ClinicalDarkOutline = Color(0xFF42507A) // Nano-wire tech grid spacing
-val ClinicalDarkOutlineVariant = Color(0xFF262E44)
+val ClinicalDarkOutline = Color(0xFF870C3D)
+val ClinicalDarkOutlineVariant = Color(0xFF6B0D47)

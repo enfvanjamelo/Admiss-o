@@ -27,6 +27,8 @@ data class AdmissionRecord(
     val frequenciaRespiratoria: String = "",
     val temperatura: String = "",
     val saturacaoO2: String = "",
+    val altura: String = "",
+    val peso: String = "",
     
     // 2. Sistemas Orgânicos & Dispositivos
     val sistemaLocomotor: String = "",
@@ -38,6 +40,8 @@ data class AdmissionRecord(
     val sistemaIntestinal: String = "",
     val sistemaIntegridadePele: String = "",
     val dispositivos: String = "",
+    val drenosJson: String = "",
+    val dispositivosJson: String = "",
     
     // Planimetria & Foto da Lesão
     val lesionPhotoUri: String? = null,
@@ -50,7 +54,7 @@ data class AdmissionRecord(
     
     // 3. Histórico Médico
     val doencasAnteriores: String = "",
-    val condicoesAnteriores: String = "",
+    val historiaDoencaAtual: String = "",
     val cirurgiasAnteriores: String = "",
     val alergias: String = "",
     val medicacoesUso: String = "",
@@ -163,6 +167,138 @@ data class AdmissionRecord(
         }
     }
 
+    fun imcValue(): Double? {
+        val h = altura.replace(",", ".").toDoubleOrNull()
+        val w = peso.replace(",", ".").toDoubleOrNull()
+        if (h != null && w != null && h > 0) {
+            val heightInMeters = if (h > 3.0) h / 100.0 else h
+            return w / (heightInMeters * heightInMeters)
+        }
+        return null
+    }
+
+    fun imcClassification(): String {
+        val imc = imcValue() ?: return "Dados insuficientes"
+        return when {
+            imc < 16.0 -> "Desnutrição Grau III"
+            imc in 16.0..16.99 -> "Desnutrição Grau II"
+            imc in 17.0..18.49 -> "Desnutrição Grau I"
+            imc in 18.5..24.99 -> "Peso Normal"
+            imc in 25.0..29.99 -> "Sobrepeso"
+            imc in 30.0..34.99 -> "Obesidade Grau I"
+            imc in 35.0..39.99 -> "Obesidade Grau II"
+            else -> "Obesidade Grau III (Mórbida)"
+        }
+    }
+
+    fun getDrenosList(): List<DrenoItem> {
+        val defaultList = listOf(
+            DrenoItem("Blake", false, "", "", ""),
+            DrenoItem("Portovac", false, "", "", ""),
+            DrenoItem("Tórax sem selo d'água", false, "", "", ""),
+            DrenoItem("Tórax com selo d'água", false, "", "", ""),
+            DrenoItem("Tubular", false, "", "", ""),
+            DrenoItem("Tubolaminar", false, "", "", ""),
+            DrenoItem("Mediastino", false, "", "", ""),
+            DrenoItem("Outros", false, "", "", "")
+        )
+        if (drenosJson.isBlank()) {
+            return defaultList
+        }
+        return try {
+            val list = mutableListOf<DrenoItem>()
+            val arr = org.json.JSONArray(drenosJson)
+            val map = mutableMapOf<String, DrenoItem>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                val tipo = obj.optString("tipo", "")
+                if (tipo.isNotBlank()) {
+                    map[tipo] = DrenoItem(
+                        tipo = tipo,
+                        selecionado = obj.optBoolean("selecionado", false),
+                        lado = obj.optString("lado", ""),
+                        debito = obj.optString("debito", ""),
+                        aspecto = obj.optString("aspecto", "")
+                    )
+                }
+            }
+            defaultList.map { defaultItem ->
+                map[defaultItem.tipo] ?: defaultItem
+            }
+        } catch (e: Exception) {
+            defaultList
+        }
+    }
+
+    fun withUpdatedDrenos(list: List<DrenoItem>): AdmissionRecord {
+        val arr = org.json.JSONArray()
+        for (item in list) {
+            val obj = org.json.JSONObject().apply {
+                put("tipo", item.tipo)
+                put("selecionado", item.selecionado)
+                put("lado", item.lado)
+                put("debito", item.debito)
+                put("aspecto", item.aspecto)
+            }
+            arr.put(obj)
+        }
+        return this.copy(drenosJson = arr.toString())
+    }
+
+    fun getDispositivosList(): List<DispositivoItem> {
+        val defaultList = listOf(
+            DispositivoItem("AVP", false, "", "", "", "", ""),
+            DispositivoItem("CVC", false, "", "", "", "", ""),
+            DispositivoItem("FAV MS", false, "", "", "", "", ""),
+            DispositivoItem("CAT HD", false, "", "", "", "", "")
+        )
+        if (dispositivosJson.isBlank()) {
+            return defaultList
+        }
+        return try {
+            val list = mutableListOf<DispositivoItem>()
+            val arr = org.json.JSONArray(dispositivosJson)
+            val map = mutableMapOf<String, DispositivoItem>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                val tipo = obj.optString("tipo", "")
+                if (tipo.isNotBlank()) {
+                    map[tipo] = DispositivoItem(
+                        tipo = tipo,
+                        selecionado = obj.optBoolean("selecionado", false),
+                        lado = obj.optString("lado", ""),
+                        dataPuncao = obj.optString("dataPuncao", ""),
+                        curativoTipo = obj.optString("curativoTipo", ""),
+                        dataTroca = obj.optString("dataTroca", ""),
+                        dataRetirada = obj.optString("dataRetirada", "")
+                    )
+                }
+            }
+            defaultList.map { defaultItem ->
+                map[defaultItem.tipo] ?: defaultItem
+            }
+        } catch (e: Exception) {
+            defaultList
+        }
+    }
+
+    fun withUpdatedDispositivos(list: List<DispositivoItem>): AdmissionRecord {
+        val arr = org.json.JSONArray()
+        for (item in list) {
+            val obj = org.json.JSONObject().apply {
+                put("tipo", item.tipo)
+                put("selecionado", item.selecionado)
+                put("lado", item.lado)
+                put("dataPuncao", item.dataPuncao)
+                put("curativoTipo", item.curativoTipo)
+                put("dataTroca", item.dataTroca)
+                put("dataRetirada", item.dataRetirada)
+            }
+            arr.put(obj)
+        }
+        return this.copy(dispositivosJson = arr.toString())
+    }
+
     fun getLesionsList(): List<SkinLesionRow> {
         if (lesionsSpreadsheetJson.isBlank()) return emptyList()
         return try {
@@ -236,155 +372,223 @@ data class AdmissionRecord(
             sb.toString()
         } else ""
 
-        // Helper technical mappings for blank fields in organ systems
-        val loc = if (sistemaLocomotor.isBlank()) "Deambulação ativa, sem déficits motores ou limitações de amplitude nas articulações (eumotricidade). Marcha de padrão estável, força muscular preservada globalmente." else sistemaLocomotor
-        val cv = if (sistemaCardiovascular.isBlank()) "Bulhas rítmicas e normofonéticas em dois tempos (BRNF2T), ausência de sopros ou ruídos extras. Hemodinamicamente estável, perfusão periférica adequada (TEC < 2s). Eufígmico." else sistemaCardiovascular
-        val resp = if (sistemaRespiratorio.isBlank()) "Eupneico em ar ambiente (AA). Expansibilidade torácica mantida de forma simétrica; murmúrio vesicular universalmente audível (MVUA) sem ruídos adventícios." else sistemaRespiratorio
-        val neur = if (sistemaNeurologico.isBlank()) "Consciente, orientado no tempo e espaço (COTE). Escala de Glasgow = 15. Pupilas isocóricas e fotorreagentes (MIFR). Ausência de déficits neurológicos focais apparentes." else sistemaNeurologico
-        val nutr = if (sistemaNutricao.isBlank()) "Eutrófico, mucosa oral corada, íntegra e hidratada. Ingestão dietética líquida/sólida por via oral (VO) preservada, sem queixas de disfagia ou sialorreia." else sistemaNutricao
-        val urin = if (sistemaUrinario.isBlank()) "Fisiologia geniturinária preservada. Eliminações vesicais presentes, diurese espontânea de coloração amarelada e aspecto límpido, sem relatos de disúria ou polaciúria." else sistemaUrinario
-        val intest = if (sistemaIntestinal.isBlank()) "Abdômen plano, flácido, indolor à palpação superficial e profunda. Ruídos hidroaéreos (RHA) presentes nos quatro quadrantes. Eliminações intestinais presentes." else sistemaIntestinal
-        val integ = if (sistemaIntegridadePele.isBlank()) "Tegumento íntegro, turgor cutâneo e elasticidade preservados. Ausência de lesões elementares, hematomas, equimoses ou sinais flogísticos na admissão hospitalar." else sistemaIntegridadePele
-        val disp = if (dispositivos.isBlank()) "Livre de acessos venosos invasivos, cateterizações ou sondagens (ausência de SVD, SNE ou drenos ativos no momento da admissão)." else dispositivos
+        // Section I: Identification and Sinais Vitais (Only non-blank items)
+        val idDetails = mutableListOf<String>()
+        if (nome.isNotBlank()) idDetails.add("• Paciente: $nome")
+        if (idade.isNotBlank()) idDetails.add("• Faixa Etária/Idade: $idade anos")
+        if (sexo.isNotBlank()) idDetails.add("• Gênero: $sexo")
+        if (religiao.isNotBlank()) idDetails.add("• Crença Religiosa: $religiao")
+        if (estadoCivil.isNotBlank()) idDetails.add("• Status Civil: $estadoCivil")
+        if (funcaoLaboral.isNotBlank()) idDetails.add("• Atividade Laboral: $funcaoLaboral")
+        if (proveniencia.isNotBlank()) idDetails.add("• Proveniência Clínica: $proveniencia")
+        if (prontuario.isNotBlank()) idDetails.add("• Prontuário Clínico: nº $prontuario")
+        if (enfermaria.isNotBlank()) idDetails.add("• Enfermaria: $enfermaria")
+        if (leito.isNotBlank()) idDetails.add("• Leito: $leito")
+        if (tipoCirurgia.isNotBlank()) idDetails.add("• Procedimento Cirúrgico Proposto: $tipoCirurgia")
 
-        return """
-            ================================================================================
-                     PARECER DE ENFERMAGEM ADMISSIONAL - PACIENTE CIRÚRGICO (SAE)
-            ================================================================================
-            REGISTRO DE SISTEMATIZAÇÃO DA ASSISTÊNCIA DE ENFERMAGEM | DATA/HORA: $dataFormatada
+        val svDetails = mutableListOf<String>()
+        if (pressaoArterial.isNotBlank()) svDetails.add("  - Pressão Arterial (PA): $pressaoArterial mmHg")
+        if (frequenciaCardiaca.isNotBlank()) {
+            val fcVal = frequenciaCardiaca.replace(Regex("[^0-9]"), "").toIntOrNull()
+            val classification = if (fcVal != null) {
+                when {
+                    fcVal < 60 -> "bradicardia"
+                    fcVal > 100 -> "taquicardia"
+                    else -> "normotensivo/eucardia"
+                }
+            } else "regularidade rítmica"
+            svDetails.add("  - Frequência Cardíaca (FC): $frequenciaCardiaca bpm ($classification)")
+        }
+        if (frequenciaRespiratoria.isNotBlank()) {
+            val frVal = frequenciaRespiratoria.replace(Regex("[^0-9]"), "").toIntOrNull()
+            val classification = if (frVal != null) {
+                when {
+                    frVal < 12 -> "bradipcneia"
+                    frVal > 20 -> "taquipneia"
+                    else -> "eupneia/padrão ventilatório estável"
+                }
+            } else "ritmicidade respiratória"
+            svDetails.add("  - Frequência Respiratória (FR): $frequenciaRespiratoria ipm ($classification)")
+        }
+        if (temperatura.isNotBlank()) {
+            val tVal = temperatura.replace(",", ".").replace(Regex("[^0-9.]"), "").toDoubleOrNull()
+            val classification = if (tVal != null) {
+                when {
+                    tVal < 35.0 -> "hipotermia severa/moderada"
+                    tVal >= 37.8 -> "estado febril/piréxia"
+                    tVal >= 37.3 -> "subfebril"
+                    else -> "afebril/normotermia"
+                }
+            } else "termorregulação cutânea"
+            svDetails.add("  - Temperatura Corporal (T): $temperatura ºC ($classification)")
+        }
+        if (saturacaoO2.isNotBlank()) {
+            val satVal = saturacaoO2.replace(Regex("[^0-9]"), "").toIntOrNull()
+            val classification = if (satVal != null) {
+                if (satVal < 95) "indício de hipoxemia" else "perfusão periférica de oxigênio adequada"
+            } else "preservação tecidual"
+            svDetails.add("  - Saturação de Oxigênio (SatO2): $saturacaoO2% ($classification)")
+        }
+        if (altura.isNotBlank()) svDetails.add("  - Altura: $altura")
+        if (peso.isNotBlank()) svDetails.add("  - Peso: $peso")
+        if (imcValue() != null) {
+            svDetails.add("  - IMC: ${String.format("%.2f kg/m²", imcValue())} (${imcClassification()})")
+        }
 
-            I. IDENTIFICAÇÃO E DADOS CLÍNICOS DO PACIENTE
-            --------------------------------------------------------------------------------
-            • Paciente: ${nome.ifBlank { "Não especificado" }}
-            • Faixa Etária/Idade: ${idade.ifBlank { "Não informada" }} anos | Gênero: ${sexo.ifBlank { "Não informado" }}
-            • Crença Religiosa: ${religiao.ifBlank { "Não referida" }} | Status Civil: ${estadoCivil.ifBlank { "Não informado" }}
-            • Atividade Laboral: ${funcaoLaboral.ifBlank { "Não cadastrada" }}
-            • Proveniência Clínica: ${proveniencia.ifBlank { "Não informada" }}
-            • Prontuário Clínico: nº ${prontuario.ifBlank { "Não especificado" }}
-            • Localização Hospitalar: Enfermaria: ${enfermaria.ifBlank { "N/A" }} | Leito: ${leito.ifBlank { "N/A" }}
-            • Procedimento Cirúrgico Proposto: ${tipoCirurgia.ifBlank { "Não informado/A definir" }}
+        // Section II: Anamnese / Historico (Only non-blank items)
+        val histDetails = mutableListOf<String>()
+        if (doencasAnteriores.isNotBlank()) histDetails.add("• Doenças Prévias/Comorbidades: $doencasAnteriores")
+        if (historiaDoencaAtual.isNotBlank()) histDetails.add("• História da Doença Atual (HDA): $historiaDoencaAtual")
+        if (cirurgiasAnteriores.isNotBlank()) histDetails.add("• Antecedentes Cirúrgicos: $cirurgiasAnteriores")
+        if (alergias.isNotBlank()) histDetails.add("• Quadro Alérgico (Hipersensibilidade): $alergias")
+        if (medicacoesUso.isNotBlank()) histDetails.add("• Farmacologia em Uso Contínuo: $medicacoesUso")
+        if (exames.isNotBlank()) histDetails.add("• Investigação Diagnóstica (Exames): $exames")
 
-            * SINAIS VITAIS (REGISTRO FISIOLÓGICO DE ADMISSÃO):
-              - Pressão Arterial (PA): ${pressaoArterial.ifBlank { "Não registrada" }} mmHg
-              - Frequência Cardíaca (FC): ${frequenciaCardiaca.ifBlank { "Não aferida" }} bpm (${if (frequenciaCardiaca.isNotBlank()) {
-                  val fcVal = frequenciaCardiaca.replace(Regex("[^0-9]"), "").toIntOrNull()
-                  if (fcVal != null) {
-                      when {
-                          fcVal < 60 -> "bradicardia"
-                          fcVal > 100 -> "taquicardia"
-                          else -> "normotensivo/eucardia"
-                      }
-                  } else "regularidade ritmica"
-              } else "parâmetro ausente"})
-              - Frequência Respiratória (FR): ${frequenciaRespiratoria.ifBlank { "Não aferida" }} ipm (${if (frequenciaRespiratoria.isNotBlank()) {
-                  val frVal = frequenciaRespiratoria.replace(Regex("[^0-9]"), "").toIntOrNull()
-                  if (frVal != null) {
-                      when {
-                          frVal < 12 -> "bradipcneia"
-                          frVal > 20 -> "taquipneia"
-                          else -> "eupneia/padrão ventilatório estável"
-                      }
-                  } else "ritmicidade respiratória"
-              } else "parâmetro ausente"})
-              - Temperatura Corporal (T): ${temperatura.ifBlank { "Não aferida" }} ºC (${if (temperatura.isNotBlank()) {
-                  val tVal = temperatura.replace(",", ".").replace(Regex("[^0-9.]"), "").toDoubleOrNull()
-                  if (tVal != null) {
-                      when {
-                          tVal < 35.0 -> "hipotermia severa/moderada"
-                          tVal >= 37.8 -> "estado febril/piréxia"
-                          tVal >= 37.3 -> "subfebril"
-                          else -> "afebril/normotermia"
-                      }
-                  } else "termorregulação cutânea"
-              } else "parâmetro ausente"})
-              - Saturação de Oxigênio (SatO2): ${saturacaoO2.ifBlank { "Não aferida" }} % (${if (saturacaoO2.isNotBlank()) {
-                  val satVal = saturacaoO2.replace(Regex("[^0-9]"), "").toIntOrNull()
-                  if (satVal != null) {
-                      if (satVal < 95) "indício de hipoxemia" else "perfusão periférica de oxigênio adequada"
-                  } else "preservação tecidual"
-              } else "parâmetro ausente"})
+        // Section III: Exame Fisico (Exame Sistemico) concatenated
+        val activeDispositivos = getDispositivosList().filter { it.selecionado }
+        val dispText = if (activeDispositivos.isNotEmpty()) {
+            val dList = activeDispositivos.map { item ->
+                when (item.tipo) {
+                    "AVP" -> "AVP (Acesso Venoso Periférico) lado ${item.lado.ifBlank { "N/I" }} puncionado em ${item.dataPuncao.ifBlank { "N/I" }}"
+                    "CVC" -> {
+                        val details = mutableListOf<String>()
+                        if (item.lado.isNotBlank()) details.add("sítio ${item.lado}")
+                        if (item.dataPuncao.isNotBlank()) details.add("punção em ${item.dataPuncao}")
+                        if (item.curativoTipo.isNotBlank()) details.add("curativo ${item.curativoTipo}")
+                        if (item.dataTroca.isNotBlank()) details.add("troca em ${item.dataTroca}")
+                        if (item.dataRetirada.isNotBlank()) details.add("retirada em ${item.dataRetirada}")
+                        "CVC (Acesso Venoso Central) com ${details.joinToString(", ")}"
+                    }
+                    "FAV MS" -> "FAV MS (Fístula Arteriovenosa em Membro Superior) lado ${item.lado.ifBlank { "N/I" }}"
+                    "CAT HD" -> "CAT HD (Cateter de Hemodiálise) sítio ${item.lado.ifBlank { "N/I" }}"
+                    else -> item.tipo
+                }
+            }
+            "dispositivos invasivos: ${dList.joinToString(", ")}" + if (dispositivos.isNotBlank()) ", outros: $dispositivos" else ""
+        } else {
+            if (dispositivos.isNotBlank()) "dispositivos invasivos: $dispositivos" else ""
+        }
 
-            II. ANAMNESE E HISTÓRICO PATOLÓGICO SELECIONADO
-            --------------------------------------------------------------------------------
-            • Doenças Prévias/Comorbidades: ${doencasAnteriores.ifBlank { "Sem comorbidades prévias relatadas." }}
-            • Condições Clínicas Coexistentes: ${condicoesAnteriores.ifBlank { "Sem condições clínicas agudas crônicas coexistentes associadas." }}
-            • Antecedentes Cirúrgicos: ${cirurgiasAnteriores.ifBlank { "Sem histórico de procedimentos cirúrgicos prévios." }}
-            • Quadro Alérgico (Hipersensibilidade): ${alergias.ifBlank { "Alerta: Sem reações de hipersensibilidade orais ou medicamentosas conhecidas." }}
-            • Farmacologia em Uso Contínuo: ${medicacoesUso.ifBlank { "Nega terapia farmacológica contínua domiciliar ou de uso recente." }}
-            • Investigação Diagnóstica (Exames): ${exames.ifBlank { "Sem exames complementares de admissão anexados no momento." }}
+        val activeDrenos = getDrenosList().filter { it.selecionado }
+        val drenosText = if (activeDrenos.isNotEmpty()) {
+            val drList = activeDrenos.map { item ->
+                val ladoStr = if (item.lado.isNotBlank()) " lado ${item.lado}" else ""
+                "dreno ${item.tipo}$ladoStr com débito ${item.debito.ifBlank { "não informado" }} e aspecto ${item.aspecto.ifBlank { "não informado" }}"
+            }
+            "drenos ativos: ${drList.joinToString(", ")}"
+        } else ""
 
-            III. EXAME FÍSICO COM PREDOMÍNIO DE TERMOS TÉCNICOS (EXAME SISTÊMICO)
-            --------------------------------------------------------------------------------
-            • Sistema Locomotor / Mobilidade:
-              $loc
-            
-            • Sistema Cardiovascular / Hemodinâmica:
-              $cv
-            
-            • Sistema Respiratório / Ventilação:
-              $resp
-            
-            • Sistema Neurológico / Psiquismo:
-              $neur
-            
-            • Nutrição, Hidratação e Cavidade Oral:
-              $nutr
-            
-            • Sistema Geniturinário:
-              $urin
-            
-            • Sistema Gastrointestinal e Eliminações:
-              $intest
-            
-            • Sistema Tegumentar / Integridade Cutâneo-Mucosa:
-              $integ
-              ${if (!lesionWidthCm.isNullOrBlank()) "--> Planimetria Volumétrica da Lesão Principal: ${lesionWidthCm}x${lesionHeightCm} cm (Área estimada: ${lesionAreaSquareCm} cm²)\n  --> Características Morfológicas descritas: $lesionDescriptionPlanimetria" else ""}
-            
-            • Dispositivos Invasivos e Acessos:
-              $disp
+        val examItems = mutableListOf<String>()
+        if (sistemaLocomotor.isNotBlank()) examItems.add(sistemaLocomotor.trim().removeSuffix(";").removeSuffix("."))
+        if (sistemaCardiovascular.isNotBlank()) examItems.add(sistemaCardiovascular.trim().removeSuffix(";").removeSuffix("."))
+        if (sistemaRespiratorio.isNotBlank()) examItems.add(sistemaRespiratorio.trim().removeSuffix(";").removeSuffix("."))
+        if (sistemaNeurologico.isNotBlank()) examItems.add(sistemaNeurologico.trim().removeSuffix(";").removeSuffix("."))
+        if (sistemaNutricao.isNotBlank()) examItems.add(sistemaNutricao.trim().removeSuffix(";").removeSuffix("."))
+        if (sistemaUrinario.isNotBlank()) examItems.add(sistemaUrinario.trim().removeSuffix(";").removeSuffix("."))
+        if (sistemaIntestinal.isNotBlank()) examItems.add(sistemaIntestinal.trim().removeSuffix(";").removeSuffix("."))
+        if (sistemaIntegridadePele.isNotBlank()) {
+            var skinText = sistemaIntegridadePele.trim().removeSuffix(";").removeSuffix(".")
+            if (!lesionWidthCm.isNullOrBlank()) {
+                skinText += ", planimetria volumétrica da lesão principal: ${lesionWidthCm}x${lesionHeightCm} cm (área estimada: ${lesionAreaSquareCm} cm²), características morfológicas: $lesionDescriptionPlanimetria"
+            }
+            examItems.add(skinText)
+        }
+        if (dispText.isNotBlank()) examItems.add(dispText)
+        if (drenosText.isNotBlank()) examItems.add(drenosText)
 
-            IV. AVALIAÇÃO SENSÓRIO-COGNITIVA
-            --------------------------------------------------------------------------------
-            • Acuidade Visual: ${acuidadeVisual.ifBlank { "Preservada, sem necessidade de lentes corretivas." }}
-            • Acuidade Auditiva: ${acuidadeAuditiva.ifBlank { "Preservada, comunicação verbal sem barreiras (eufasia)." }}
+        // Section IV: Sensório-Cognitiva
+        val sensoryDetails = mutableListOf<String>()
+        if (acuidadeVisual.isNotBlank()) sensoryDetails.add("• Acuidade Visual: $acuidadeVisual")
+        if (acuidadeAuditiva.isNotBlank()) sensoryDetails.add("• Acuidade Auditiva: $acuidadeAuditiva")
 
-            V. ESTRATIFICAÇÃO DE RISCO CLÍNICO E ESCALAS MULTIDIMENSIONAL
-            --------------------------------------------------------------------------------
-            A) ESCALA DE BRADEN (Avaliação de Risco para Lesão por Pressão - LPP):
-               • Critério Sensorial: $bradenPercepcaoSensorial | Umidade: $bradenUmidade | Atividade: $bradenAtividade
-               • Mobilidade: $bradenMobilidade | Nutrição: $bradenNutricao | Fricção e Cisalhamento: $bradenFriccaoCisalhamento
-               • ESCORE TOTAL DE BRADEN: ${bradenScore()} / 23 pontos
-               • DIAGNÓSTICO DE RISCO (Braden): ${bradenClassification().uppercase()}
+        // Section V: Escalas - Dor details
+        val dorDetails = mutableListOf<String>()
+        dorDetails.add("• Nível de Intensidade Álgica: $dorNivel / 10 (${dorClassification().uppercase()})")
+        if (dorLocalizacao.isNotBlank()) dorDetails.add("• Localização Anatômica: $dorLocalizacao")
+        if (dorCaracteristicas.isNotBlank()) dorDetails.add("• Características Clínicas da Dor: $dorCaracteristicas")
 
-            B) ESCALA DE FUGULIN (Estratificação de Grau de Dependência Assistencial da Enfermagem):
-               • Estado Mental: $fugulinEstadoMental | Oxigenação: $fugulinOxigenacao | Sinais Vitais: $fugulinSinaisVitais
-               • Motilidade: $fugulinMotilidade | Locomoção: $fugulinLocomocao | Cuidado Corporal: $fugulinCuidadoCorporal
-               • Eliminação: $fugulinEliminacao | Nutrição/Hidratação: $fugulinNutricaoHidratacao | Terapêutica: $fugulinTerapeutica
-               • ESCORE TOTAL DE FUGULIN: ${fugulinScore()} / 36 pontos
-               • COMPLEXIDADE DA ASSISTÊNCIA: ${fugulinClassification().uppercase()}
+        val sb = java.lang.StringBuilder()
+        sb.append("================================================================================\n")
+        sb.append("         PARECER DE ENFERMAGEM ADMISSIONAL - PACIENTE CIRÚRGICO (SAE)\n")
+        sb.append("================================================================================\n")
+        sb.append("REGISTRO DE SISTEMATIZAÇÃO DA ASSISTÊNCIA DE ENFERMAGEM | DATA/HORA: $dataFormatada\n\n")
 
-            C) ESCALA DE MORSE (Predisposição e Risco de Evento de Quedas):
-               • Historial de Queda Recente: $morseHistoricoQuedas | Diagnóstico Secundário: $morseDiagnosticoSecundario
-               • Suporte para Deambulação: $morseAuxilioLocomocao | Terapia Endovenosa Ativa: $morseTerapiaEV
-               • Padrão de Marcha Corporal: $morseMarcha | Estado Mental Cognitivo: $morseEstadoMental
-               • ESCORE TOTAL DE MORSE: ${morseScore()} pontos
-               • PROTOCOLO DE PREVENÇÃO (Morse): ${morseClassification().uppercase()}
+        if (idDetails.isNotEmpty() || svDetails.isNotEmpty()) {
+            sb.append("I. IDENTIFICAÇÃO E DADOS CLÍNICOS DO PACIENTE\n")
+            sb.append("--------------------------------------------------------------------------------\n")
+            idDetails.forEach { sb.append(it).append("\n") }
+            if (svDetails.isNotEmpty()) {
+                sb.append("\n* SINAIS VITAIS (REGISTRO FISIOLÓGICO DE ADMISSÃO):\n")
+                svDetails.forEach { sb.append(it).append("\n") }
+            }
+            sb.append("\n")
+        }
 
-            D) ESCALA DE COMA DE GLASGOW (Nível de Reatividade Neurológica):
-               • Abertura Ocular: $glasgowAberturaOcular | Resposta Verbal: $glasgowRespostaVerbal | Resposta Motora: $glasgowRespostaMotora
-               • ESCORE TOTAL DE GLASGOW: ${glasgowScore()} / 15 pontos (${glasgowClassification().uppercase()})
+        if (histDetails.isNotEmpty()) {
+            sb.append("II. ANAMNESE E HISTÓRICO PATOLÓGICO SELECIONADO\n")
+            sb.append("--------------------------------------------------------------------------------\n")
+            histDetails.forEach { sb.append(it).append("\n") }
+            sb.append("\n")
+        }
 
-            E) ESCALA VISUAL ANALÓGICA DA DOR (EVA - Semioticamente Estruturada):
-               • Nível de Intensidade Álgica: $dorNivel / 10 (${dorClassification().uppercase()})
-               • Localização Anatômica: ${dorLocalizacao.ifBlank { "Sem foco de dor ativo de acordo com relato verbal espontâneo." }}
-               • Características Clínicas da Dor: ${dorCaracteristicas.ifBlank { "Nega queixas álgicas no momento." }}
-            $lesionsTable
-            ${if (aiInterventionsResult.isNotBlank()) "\n            ================================================================================\n              DIRETRIZES TERAPÊUTICAS E INTERVENÇÕES DA ASSISTÊNCIA (IA - GEMINI)\n            ================================================================================\n            $aiInterventionsResult" else ""}
+        if (examItems.isNotEmpty()) {
+            sb.append("III. EXAME FÍSICO COM PREDOMÍNIO DE TERMOS TÉCNICOS (EXAME SISTÊMICO)\n")
+            sb.append("--------------------------------------------------------------------------------\n")
+            sb.append(examItems.joinToString("; ")).append(".\n\n")
+        }
 
-            --------------------------------------------------------------------------------
-            Relatório de Enfermagem padronizado e gerado eletronicamente em: $dataFormatada
-            ================================================================================
-        """.trimIndent()
+        if (sensoryDetails.isNotEmpty()) {
+            sb.append("IV. AVALIAÇÃO SENSÓRIO-COGNITIVA\n")
+            sb.append("--------------------------------------------------------------------------------\n")
+            sensoryDetails.forEach { sb.append(it).append("\n") }
+            sb.append("\n")
+        }
+
+        sb.append("V. ESTRATIFICAÇÃO DE RISCO CLÍNICO E ESCALAS MULTIDIMENSIONAL\n")
+        sb.append("--------------------------------------------------------------------------------\n")
+        sb.append("A) ESCALA DE BRADEN (Avaliação de Risco para Lesão por Pressão - LPP):\n")
+        sb.append("   • Critério Sensorial: $bradenPercepcaoSensorial | Umidade: $bradenUmidade | Atividade: $bradenAtividade\n")
+        sb.append("   • Mobilidade: $bradenMobilidade | Nutrição: $bradenNutricao | Fricção e Cisalhamento: $bradenFriccaoCisalhamento\n")
+        sb.append("   • ESCORE TOTAL DE BRADEN: ${bradenScore()} / 23 pontos\n")
+        sb.append("   • DIAGNÓSTICO DE RISCO (Braden): ${bradenClassification().uppercase()}\n\n")
+
+        sb.append("B) ESCALA DE FUGULIN (Estratificação de Grau de Dependência Assistencial da Enfermagem):\n")
+        sb.append("   • Estado Mental: $fugulinEstadoMental | Oxigenação: $fugulinOxigenacao | Sinais Vitais: $fugulinSinaisVitais\n")
+        sb.append("   • Motilidade: $fugulinMotilidade | Locomoção: $fugulinLocomocao | Cuidado Corporal: $fugulinCuidadoCorporal\n")
+        sb.append("   • Eliminação: $fugulinEliminacao | Nutrição/Hidratação: $fugulinNutricaoHidratacao | Terapêutica: $fugulinTerapeutica\n")
+        sb.append("   • ESCORE TOTAL DE FUGULIN: ${fugulinScore()} / 36 pontos\n")
+        sb.append("   • COMPLEXIDADE DA ASSISTÊNCIA: ${fugulinClassification().uppercase()}\n\n")
+
+        sb.append("C) ESCALA DE MORSE (Predisposição e Risco de Evento de Quedas):\n")
+        sb.append("   • Historial de Queda Recente: $morseHistoricoQuedas | Diagnóstico Secundário: $morseDiagnosticoSecundario\n")
+        sb.append("   • Suporte para Deambulação: $morseAuxilioLocomocao | Terapia Endovenosa Ativa: $morseTerapiaEV\n")
+        sb.append("   • Padrão de Marcha Corporal: $morseMarcha | Estado Mental Cognitivo: $morseEstadoMental\n")
+        sb.append("   • ESCORE TOTAL DE MORSE: ${morseScore()} pontos\n")
+        sb.append("   • PROTOCOLO DE PREVENÇÃO (Morse): ${morseClassification().uppercase()}\n\n")
+
+        sb.append("D) ESCALA DE COMA DE GLASGOW (Nível de Reatividade Neurológica):\n")
+        sb.append("   • Abertura Ocular: $glasgowAberturaOcular | Resposta Verbal: $glasgowRespostaVerbal | Resposta Motora: $glasgowRespostaMotora\n")
+        sb.append("   • ESCORE TOTAL DE GLASGOW: ${glasgowScore()} / 15 pontos (${glasgowClassification().uppercase()})\n\n")
+
+        sb.append("E) ESCALA VISUAL ANALÓGICA DA DOR (EVA - Semioticamente Estruturada):\n")
+        dorDetails.forEach { sb.append("   ").append(it).append("\n") }
+
+        if (lesionsTable.isNotBlank()) {
+            sb.append("\n").append(lesionsTable)
+        }
+
+        if (aiInterventionsResult.isNotBlank()) {
+            sb.append("\n================================================================================\n")
+            sb.append("  DIRETRIZES TERAPÊUTICAS E INTERVENÇÕES DA ASSISTÊNCIA (IA - GEMINI)\n")
+            sb.append("================================================================================\n")
+            sb.append(aiInterventionsResult).append("\n")
+        }
+
+        sb.append("\n--------------------------------------------------------------------------------\n")
+        sb.append("Relatório de Enfermagem padronizado e gerado eletronicamente em: $dataFormatada\n")
+        sb.append("================================================================================\n")
+
+        return sb.toString()
     }
 }
 
@@ -399,4 +603,22 @@ data class SkinLesionRow(
     val tipoTecido: String = "",
     val exsudato: String = "",
     val fotoUri: String? = null
+)
+
+data class DrenoItem(
+    val tipo: String,
+    val selecionado: Boolean = false,
+    val lado: String = "", // "D", "E", or ""
+    val debito: String = "",
+    val aspecto: String = ""
+)
+
+data class DispositivoItem(
+    val tipo: String, // "AVP", "CVC", "FAV MS", "CAT HD"
+    val selecionado: Boolean = false,
+    val lado: String = "", // "D", "E", or specific site like "VJD", "VSCD"
+    val dataPuncao: String = "",
+    val curativoTipo: String = "", // "convencional" or "filme"
+    val dataTroca: String = "",
+    val dataRetirada: String = ""
 )

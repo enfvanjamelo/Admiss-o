@@ -34,6 +34,8 @@ fun AdmissionRecord.toJsonObject(): JSONObject {
     obj.put("frequencia_respiratoria", frequenciaRespiratoria)
     obj.put("temperatura", temperatura)
     obj.put("saturacao_o2", saturacaoO2)
+    obj.put("altura", altura)
+    obj.put("peso", peso)
     obj.put("sistema_locomotor", sistemaLocomotor)
     obj.put("sistema_cardiovascular", sistemaCardiovascular)
     obj.put("sistema_respiratorio", sistemaRespiratorio)
@@ -43,6 +45,8 @@ fun AdmissionRecord.toJsonObject(): JSONObject {
     obj.put("sistema_intestinal", sistemaIntestinal)
     obj.put("sistema_integridade_pele", sistemaIntegridadePele)
     obj.put("dispositivos", dispositivos)
+    obj.put("drenos_json", drenosJson)
+    obj.put("dispositivos_json", dispositivosJson)
     obj.put("lesion_photo_uri", lesionPhotoUri ?: JSONObject.NULL)
     obj.put("lesion_width_cm", lesionWidthCm)
     obj.put("lesion_height_cm", lesionHeightCm)
@@ -51,7 +55,7 @@ fun AdmissionRecord.toJsonObject(): JSONObject {
     obj.put("ai_interventions_result", aiInterventionsResult)
     obj.put("lesions_spreadsheet_json", lesionsSpreadsheetJson)
     obj.put("doencas_anteriores", doencasAnteriores)
-    obj.put("condicoes_anteriores", condicoesAnteriores)
+    obj.put("historia_doenca_atual", historiaDoencaAtual)
     obj.put("cirurgias_anteriores", cirurgiasAnteriores)
     obj.put("alergias", alergias)
     obj.put("medicacoes_uso", medicacoesUso)
@@ -115,6 +119,8 @@ fun JSONObject.toAdmissionRecord(): AdmissionRecord {
         frequenciaRespiratoria = this.optString("frequencia_respiratoria", ""),
         temperatura = this.optString("temperatura", ""),
         saturacaoO2 = this.optString("saturacao_o2", ""),
+        altura = this.optString("altura", ""),
+        peso = this.optString("peso", ""),
         sistemaLocomotor = this.optString("sistema_locomotor", ""),
         sistemaCardiovascular = this.optString("sistema_cardiovascular", ""),
         sistemaRespiratorio = this.optString("sistema_respiratorio", ""),
@@ -124,6 +130,8 @@ fun JSONObject.toAdmissionRecord(): AdmissionRecord {
         sistemaIntestinal = this.optString("sistema_intestinal", ""),
         sistemaIntegridadePele = this.optString("sistema_integridade_pele", ""),
         dispositivos = this.optString("dispositivos", ""),
+        drenosJson = this.optString("drenos_json", ""),
+        dispositivosJson = this.optString("dispositivos_json", ""),
         lesionPhotoUri = if (this.isNull("lesion_photo_uri")) null else this.optString("lesion_photo_uri", null),
         lesionWidthCm = this.optString("lesion_width_cm", ""),
         lesionHeightCm = this.optString("lesion_height_cm", ""),
@@ -132,7 +140,7 @@ fun JSONObject.toAdmissionRecord(): AdmissionRecord {
         aiInterventionsResult = this.optString("ai_interventions_result", ""),
         lesionsSpreadsheetJson = this.optString("lesions_spreadsheet_json", ""),
         doencasAnteriores = this.optString("doencas_anteriores", ""),
-        condicoesAnteriores = this.optString("condicoes_anteriores", ""),
+        historiaDoencaAtual = this.optString("historia_doenca_atual", ""),
         cirurgiasAnteriores = this.optString("cirurgias_anteriores", ""),
         alergias = this.optString("alergias", ""),
         medicacoesUso = this.optString("medicacoes_uso", ""),
