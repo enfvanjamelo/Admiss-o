@@ -387,8 +387,8 @@ class AdmissionViewModel(application: Application) : AndroidViewModel(applicatio
         _screenState.value = ScreenState.List
     }
 
-    fun navigateToNewForm() {
-        _currentRecord.value = AdmissionRecord()
+    fun navigateToNewForm(recordType: String = "Admissão") {
+        _currentRecord.value = AdmissionRecord(recordType = recordType)
         _screenState.value = ScreenState.Form(isEditMode = false)
     }
 

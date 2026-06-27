@@ -7,6 +7,7 @@ import androidx.room.PrimaryKey
 data class AdmissionRecord(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val timestamp: Long = System.currentTimeMillis(),
+    val recordType: String = "Admissão",
     
     // 1. Dados do Paciente
     val nome: String = "",
@@ -317,7 +318,10 @@ data class AdmissionRecord(
                         areaCm2 = obj.optString("areaCm2", ""),
                         tipoTecido = obj.optString("tipoTecido", ""),
                         exsudato = obj.optString("exsudato", ""),
-                        fotoUri = if (obj.isNull("fotoUri")) null else obj.optString("fotoUri")
+                        fotoUri = if (obj.isNull("fotoUri")) null else obj.optString("fotoUri"),
+                        descricaoAudio = obj.optString("descricaoAudio", ""),
+                        tipoCobertura = obj.optString("tipoCobertura", ""),
+                        dataTroca = obj.optString("dataTroca", "")
                     )
                 )
             }
@@ -341,6 +345,9 @@ data class AdmissionRecord(
                 put("tipoTecido", item.tipoTecido)
                 put("exsudato", item.exsudato)
                 put("fotoUri", item.fotoUri)
+                put("descricaoAudio", item.descricaoAudio)
+                put("tipoCobertura", item.tipoCobertura)
+                put("dataTroca", item.dataTroca)
             }
             arr.put(obj)
         }
@@ -351,22 +358,23 @@ data class AdmissionRecord(
         val dateFormat = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault())
         val dataFormatada = dateFormat.format(java.util.Date(timestamp))
         
+        val isEvolucao = recordType == "Evolução"
         val lesions = getLesionsList()
         val lesionsTable = if (lesions.isNotEmpty()) {
             val sb = java.lang.StringBuilder("\nVI. MONITORAMENTO E PLANILHA DE LESÕES CUTÂNEAS\n--------------------------------------------------------------------------------\n")
-            sb.append(String.format("%-11s | %-15s | %-15s | %-12s | %-15s\n", "Data Reg.", "Localização", "Tipo de Lesão", "Área/Dimens.", "Padrão Tecidual"))
-            sb.append("--------------------------------------------------------------------------------\n")
-            for (l in lesions) {
+            for ((index, l) in lesions.withIndex()) {
                 val dims = "${l.larguraCm}x${l.comprimentoCm} cm"
-                val areaStr = if (l.areaCm2.isNotBlank()) "(${l.areaCm2} cm²)" else ""
-                val dimFull = "$dims $areaStr"
-                sb.append(String.format("%-11s | %-15s | %-15s | %-12s | %-15s\n", 
-                    l.dataRegistro.take(11), 
-                    l.localizacao.take(15), 
-                    l.tipoLesao.take(15), 
-                    dimFull.take(12), 
-                    l.tipoTecido.take(15)
-                ))
+                val areaStr = if (l.areaCm2.isNotBlank()) " (Área: ${l.areaCm2} cm²)" else ""
+                sb.append("• Lesão #${index + 1}:\n")
+                sb.append("  - Data Registro: ${l.dataRegistro}\n")
+                sb.append("  - Localização: ${l.localizacao}\n")
+                sb.append("  - Tipo de Lesão: ${l.tipoLesao}\n")
+                sb.append("  - Dimensões: $dims$areaStr\n")
+                sb.append("  - Padrão Tecidual: ${l.tipoTecido} | Exsudato: ${l.exsudato}\n")
+                if (l.tipoCobertura.isNotBlank()) sb.append("  - Cobertura/Curativo: ${l.tipoCobertura}\n")
+                if (l.dataTroca.isNotBlank()) sb.append("  - Data da Próxima Troca: ${l.dataTroca}\n")
+                if (l.descricaoAudio.isNotBlank()) sb.append("  - Transcrição do Áudio / Descrição: ${l.descricaoAudio}\n")
+                sb.append("\n")
             }
             sb.append("--------------------------------------------------------------------------------\n")
             sb.toString()
@@ -377,10 +385,10 @@ data class AdmissionRecord(
         if (nome.isNotBlank()) idDetails.add("• Paciente: $nome")
         if (idade.isNotBlank()) idDetails.add("• Faixa Etária/Idade: $idade anos")
         if (sexo.isNotBlank()) idDetails.add("• Gênero: $sexo")
-        if (religiao.isNotBlank()) idDetails.add("• Crença Religiosa: $religiao")
-        if (estadoCivil.isNotBlank()) idDetails.add("• Status Civil: $estadoCivil")
-        if (funcaoLaboral.isNotBlank()) idDetails.add("• Atividade Laboral: $funcaoLaboral")
-        if (proveniencia.isNotBlank()) idDetails.add("• Proveniência Clínica: $proveniencia")
+        if (!isEvolucao && religiao.isNotBlank()) idDetails.add("• Crença Religiosa: $religiao")
+        if (!isEvolucao && estadoCivil.isNotBlank()) idDetails.add("• Status Civil: $estadoCivil")
+        if (!isEvolucao && funcaoLaboral.isNotBlank()) idDetails.add("• Atividade Laboral: $funcaoLaboral")
+        if (!isEvolucao && proveniencia.isNotBlank()) idDetails.add("• Proveniência Clínica: $proveniencia")
         if (prontuario.isNotBlank()) idDetails.add("• Prontuário Clínico: nº $prontuario")
         if (enfermaria.isNotBlank()) idDetails.add("• Enfermaria: $enfermaria")
         if (leito.isNotBlank()) idDetails.add("• Leito: $leito")
@@ -429,17 +437,19 @@ data class AdmissionRecord(
             } else "preservação tecidual"
             svDetails.add("  - Saturação de Oxigênio (SatO2): $saturacaoO2% ($classification)")
         }
-        if (altura.isNotBlank()) svDetails.add("  - Altura: $altura")
-        if (peso.isNotBlank()) svDetails.add("  - Peso: $peso")
-        if (imcValue() != null) {
-            svDetails.add("  - IMC: ${String.format("%.2f kg/m²", imcValue())} (${imcClassification()})")
+        if (!isEvolucao) {
+            if (altura.isNotBlank()) svDetails.add("  - Altura: $altura")
+            if (peso.isNotBlank()) svDetails.add("  - Peso: $peso")
+            if (imcValue() != null) {
+                svDetails.add("  - IMC: ${String.format("%.2f kg/m²", imcValue())} (${imcClassification()})")
+            }
         }
 
         // Section II: Anamnese / Historico (Only non-blank items)
         val histDetails = mutableListOf<String>()
-        if (doencasAnteriores.isNotBlank()) histDetails.add("• Doenças Prévias/Comorbidades: $doencasAnteriores")
-        if (historiaDoencaAtual.isNotBlank()) histDetails.add("• História da Doença Atual (HDA): $historiaDoencaAtual")
-        if (cirurgiasAnteriores.isNotBlank()) histDetails.add("• Antecedentes Cirúrgicos: $cirurgiasAnteriores")
+        if (!isEvolucao && doencasAnteriores.isNotBlank()) histDetails.add("• Doenças Prévias/Comorbidades: $doencasAnteriores")
+        if (!isEvolucao && historiaDoencaAtual.isNotBlank()) histDetails.add("• História da Doença Atual (HDA): $historiaDoencaAtual")
+        if (!isEvolucao && cirurgiasAnteriores.isNotBlank()) histDetails.add("• Antecedentes Cirúrgicos: $cirurgiasAnteriores")
         if (alergias.isNotBlank()) histDetails.add("• Quadro Alérgico (Hipersensibilidade): $alergias")
         if (medicacoesUso.isNotBlank()) histDetails.add("• Farmacologia em Uso Contínuo: $medicacoesUso")
         if (exames.isNotBlank()) histDetails.add("• Investigação Diagnóstica (Exames): $exames")
@@ -509,7 +519,11 @@ data class AdmissionRecord(
 
         val sb = java.lang.StringBuilder()
         sb.append("================================================================================\n")
-        sb.append("         PARECER DE ENFERMAGEM ADMISSIONAL - PACIENTE CIRÚRGICO (SAE)\n")
+        if (isEvolucao) {
+            sb.append("                   EVOLUÇÃO DE ENFERMAGEM - PACIENTE CIRÚRGICO\n")
+        } else {
+            sb.append("         PARECER DE ENFERMAGEM ADMISSIONAL - PACIENTE CIRÚRGICO (SAE)\n")
+        }
         sb.append("================================================================================\n")
         sb.append("REGISTRO DE SISTEMATIZAÇÃO DA ASSISTÊNCIA DE ENFERMAGEM | DATA/HORA: $dataFormatada\n\n")
 
@@ -518,7 +532,8 @@ data class AdmissionRecord(
             sb.append("--------------------------------------------------------------------------------\n")
             idDetails.forEach { sb.append(it).append("\n") }
             if (svDetails.isNotEmpty()) {
-                sb.append("\n* SINAIS VITAIS (REGISTRO FISIOLÓGICO DE ADMISSÃO):\n")
+                sb.append("\n* SINAIS VITAIS (REGISTRO FISIOLÓGICO DE ")
+                if (isEvolucao) sb.append("ACOMPANHAMENTO):\n") else sb.append("ADMISSÃO):\n")
                 svDetails.forEach { sb.append(it).append("\n") }
             }
             sb.append("\n")
@@ -546,32 +561,43 @@ data class AdmissionRecord(
 
         sb.append("V. ESTRATIFICAÇÃO DE RISCO CLÍNICO E ESCALAS MULTIDIMENSIONAL\n")
         sb.append("--------------------------------------------------------------------------------\n")
-        sb.append("A) ESCALA DE BRADEN (Avaliação de Risco para Lesão por Pressão - LPP):\n")
-        sb.append("   • Critério Sensorial: $bradenPercepcaoSensorial | Umidade: $bradenUmidade | Atividade: $bradenAtividade\n")
-        sb.append("   • Mobilidade: $bradenMobilidade | Nutrição: $bradenNutricao | Fricção e Cisalhamento: $bradenFriccaoCisalhamento\n")
-        sb.append("   • ESCORE TOTAL DE BRADEN: ${bradenScore()} / 23 pontos\n")
-        sb.append("   • DIAGNÓSTICO DE RISCO (Braden): ${bradenClassification().uppercase()}\n\n")
+        
+        if (isEvolucao) {
+            sb.append("• ESCALA DE BRADEN (Risco de LPP): ${bradenScore()} / 23 pontos (${bradenClassification().uppercase()})\n")
+            sb.append("• ESCALA DE FUGULIN (Dependência): ${fugulinScore()} / 36 pontos (${fugulinClassification().uppercase()})\n")
+            sb.append("• ESCALA DE MORSE (Quedas): ${morseScore()} pontos (${morseClassification().uppercase()})\n")
+            sb.append("• ESCALA DE COMA DE GLASGOW: ${glasgowScore()} / 15 pontos (${glasgowClassification().uppercase()})\n")
+            sb.append("• ESCALA VISUAL ANALÓGICA DA DOR (EVA):\n")
+            dorDetails.forEach { sb.append("  ").append(it).append("\n") }
+            sb.append("\n")
+        } else {
+            sb.append("A) ESCALA DE BRADEN (Avaliação de Risco para Lesão por Pressão - LPP):\n")
+            sb.append("   • Critério Sensorial: $bradenPercepcaoSensorial | Umidade: $bradenUmidade | Atividade: $bradenAtividade\n")
+            sb.append("   • Mobilidade: $bradenMobilidade | Nutrição: $bradenNutricao | Fricção e Cisalhamento: $bradenFriccaoCisalhamento\n")
+            sb.append("   • ESCORE TOTAL DE BRADEN: ${bradenScore()} / 23 pontos\n")
+            sb.append("   • DIAGNÓSTICO DE RISCO (Braden): ${bradenClassification().uppercase()}\n\n")
 
-        sb.append("B) ESCALA DE FUGULIN (Estratificação de Grau de Dependência Assistencial da Enfermagem):\n")
-        sb.append("   • Estado Mental: $fugulinEstadoMental | Oxigenação: $fugulinOxigenacao | Sinais Vitais: $fugulinSinaisVitais\n")
-        sb.append("   • Motilidade: $fugulinMotilidade | Locomoção: $fugulinLocomocao | Cuidado Corporal: $fugulinCuidadoCorporal\n")
-        sb.append("   • Eliminação: $fugulinEliminacao | Nutrição/Hidratação: $fugulinNutricaoHidratacao | Terapêutica: $fugulinTerapeutica\n")
-        sb.append("   • ESCORE TOTAL DE FUGULIN: ${fugulinScore()} / 36 pontos\n")
-        sb.append("   • COMPLEXIDADE DA ASSISTÊNCIA: ${fugulinClassification().uppercase()}\n\n")
+            sb.append("B) ESCALA DE FUGULIN (Estratificação de Grau de Dependência Assistencial da Enfermagem):\n")
+            sb.append("   • Estado Mental: $fugulinEstadoMental | Oxigenação: $fugulinOxigenacao | Sinais Vitais: $fugulinSinaisVitais\n")
+            sb.append("   • Motilidade: $fugulinMotilidade | Locomoção: $fugulinLocomocao | Cuidado Corporal: $fugulinCuidadoCorporal\n")
+            sb.append("   • Eliminação: $fugulinEliminacao | Nutrição/Hidratação: $fugulinNutricaoHidratacao | Terapêutica: $fugulinTerapeutica\n")
+            sb.append("   • ESCORE TOTAL DE FUGULIN: ${fugulinScore()} / 36 pontos\n")
+            sb.append("   • COMPLEXIDADE DA ASSISTÊNCIA: ${fugulinClassification().uppercase()}\n\n")
 
-        sb.append("C) ESCALA DE MORSE (Predisposição e Risco de Evento de Quedas):\n")
-        sb.append("   • Historial de Queda Recente: $morseHistoricoQuedas | Diagnóstico Secundário: $morseDiagnosticoSecundario\n")
-        sb.append("   • Suporte para Deambulação: $morseAuxilioLocomocao | Terapia Endovenosa Ativa: $morseTerapiaEV\n")
-        sb.append("   • Padrão de Marcha Corporal: $morseMarcha | Estado Mental Cognitivo: $morseEstadoMental\n")
-        sb.append("   • ESCORE TOTAL DE MORSE: ${morseScore()} pontos\n")
-        sb.append("   • PROTOCOLO DE PREVENÇÃO (Morse): ${morseClassification().uppercase()}\n\n")
+            sb.append("C) ESCALA DE MORSE (Predisposição e Risco de Evento de Quedas):\n")
+            sb.append("   • Historial de Queda Recente: $morseHistoricoQuedas | Diagnóstico Secundário: $morseDiagnosticoSecundario\n")
+            sb.append("   • Suporte para Deambulação: $morseAuxilioLocomocao | Terapia Endovenosa Ativa: $morseTerapiaEV\n")
+            sb.append("   • Padrão de Marcha Corporal: $morseMarcha | Estado Mental Cognitivo: $morseEstadoMental\n")
+            sb.append("   • ESCORE TOTAL DE MORSE: ${morseScore()} pontos\n")
+            sb.append("   • PROTOCOLO DE PREVENÇÃO (Morse): ${morseClassification().uppercase()}\n\n")
 
-        sb.append("D) ESCALA DE COMA DE GLASGOW (Nível de Reatividade Neurológica):\n")
-        sb.append("   • Abertura Ocular: $glasgowAberturaOcular | Resposta Verbal: $glasgowRespostaVerbal | Resposta Motora: $glasgowRespostaMotora\n")
-        sb.append("   • ESCORE TOTAL DE GLASGOW: ${glasgowScore()} / 15 pontos (${glasgowClassification().uppercase()})\n\n")
+            sb.append("D) ESCALA DE COMA DE GLASGOW (Nível de Reatividade Neurológica):\n")
+            sb.append("   • Abertura Ocular: $glasgowAberturaOcular | Resposta Verbal: $glasgowRespostaVerbal | Resposta Motora: $glasgowRespostaMotora\n")
+            sb.append("   • ESCORE TOTAL DE GLASGOW: ${glasgowScore()} / 15 pontos (${glasgowClassification().uppercase()})\n\n")
 
-        sb.append("E) ESCALA VISUAL ANALÓGICA DA DOR (EVA - Semioticamente Estruturada):\n")
-        dorDetails.forEach { sb.append("   ").append(it).append("\n") }
+            sb.append("E) ESCALA VISUAL ANALÓGICA DA DOR (EVA - Semioticamente Estruturada):\n")
+            dorDetails.forEach { sb.append("   ").append(it).append("\n") }
+        }
 
         if (lesionsTable.isNotBlank()) {
             sb.append("\n").append(lesionsTable)
@@ -585,7 +611,11 @@ data class AdmissionRecord(
         }
 
         sb.append("\n--------------------------------------------------------------------------------\n")
-        sb.append("Relatório de Enfermagem padronizado e gerado eletronicamente em: $dataFormatada\n")
+        if (isEvolucao) {
+            sb.append("Relatório de Evolução de Enfermagem padronizado e gerado eletronicamente em: $dataFormatada\n")
+        } else {
+            sb.append("Relatório de Enfermagem padronizado e gerado eletronicamente em: $dataFormatada\n")
+        }
         sb.append("================================================================================\n")
 
         return sb.toString()
@@ -602,7 +632,10 @@ data class SkinLesionRow(
     val areaCm2: String = "",
     val tipoTecido: String = "",
     val exsudato: String = "",
-    val fotoUri: String? = null
+    val fotoUri: String? = null,
+    val descricaoAudio: String = "",
+    val tipoCobertura: String = "",
+    val dataTroca: String = ""
 )
 
 data class DrenoItem(

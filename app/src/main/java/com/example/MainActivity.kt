@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -149,7 +150,7 @@ class MainActivity : ComponentActivity() {
                                 admissions = admissions,
                                 isDarkTheme = isDarkTheme,
                                 onToggleTheme = { viewModel.toggleTheme() },
-                                onAddClick = { viewModel.navigateToNewForm() },
+                                onAddClick = { viewModel.navigateToNewForm(it) },
                                 onEditClick = { viewModel.navigateToEditForm(it) },
                                 onDeleteClick = { viewModel.deleteRecord(it) },
                                 onViewClick = { viewModel.navigateToReportPreview(it) },
@@ -365,7 +366,7 @@ fun AdmissionListScreen(
     admissions: List<AdmissionRecord>,
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
-    onAddClick: () -> Unit,
+    onAddClick: (String) -> Unit,
     onEditClick: (AdmissionRecord) -> Unit,
     onDeleteClick: (AdmissionRecord) -> Unit,
     onViewClick: (AdmissionRecord) -> Unit,
@@ -384,10 +385,19 @@ fun AdmissionListScreen(
     var searchQuery by remember { mutableStateOf("") }
     var showSupabaseDialog by remember { mutableStateOf(false) }
     var showQrCodeDialog by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableStateOf(0) }
 
     val filteredAdmissions = remember(admissions, searchQuery) {
         if (searchQuery.isBlank()) admissions
         else admissions.filter { it.nome.contains(searchQuery, ignoreCase = true) || it.prontuario.contains(searchQuery) }
+    }
+
+    val filteredAdmissionsByTab = remember(filteredAdmissions, selectedTab) {
+        if (selectedTab == 0) {
+            filteredAdmissions.filter { it.recordType != "Evolução" }
+        } else {
+            filteredAdmissions.filter { it.recordType == "Evolução" }
+        }
     }
 
     Scaffold(
@@ -499,9 +509,9 @@ fun AdmissionListScreen(
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = onAddClick,
+                onClick = { onAddClick(if (selectedTab == 0) "Admissão" else "Evolução") },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Nova Admissão") },
+                text = { Text(if (selectedTab == 0) "Nova Admissão" else "Nova Evolução") },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.testTag("nova_admissao_fab")
@@ -515,6 +525,24 @@ fun AdmissionListScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
+            TabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 8.dp)
+            ) {
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    text = { Text("Admissão de Enfermagem", fontWeight = FontWeight.Bold) }
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    text = { Text("Evolução de Enfermagem", fontWeight = FontWeight.Bold) }
+                )
+            }
+
             if (syncStatus.isNotBlank()) {
                 Surface(
                     color = MaterialTheme.colorScheme.secondaryContainer,
@@ -585,7 +613,7 @@ fun AdmissionListScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Quick Dashboard Count and Download CSV Button
-            if (filteredAdmissions.isNotEmpty()) {
+            if (filteredAdmissionsByTab.isNotEmpty()) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -603,7 +631,7 @@ fun AdmissionListScreen(
                     ) {
                         Column {
                             Text(
-                                text = "Total no Banco: ${filteredAdmissions.size}",
+                                text = "Total no Banco: ${filteredAdmissionsByTab.size}",
                                 fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.primary
@@ -640,7 +668,7 @@ fun AdmissionListScreen(
                 }
             }
 
-            if (filteredAdmissions.isEmpty()) {
+            if (filteredAdmissionsByTab.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -668,22 +696,26 @@ fun AdmissionListScreen(
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = if (searchQuery.isBlank()) "Nenhum paciente admitido" else "Nenhum resultado encontrado",
+                            text = if (searchQuery.isBlank()) {
+                                if (selectedTab == 0) "Nenhuma admissão registrada" else "Nenhuma evolução registrada"
+                            } else "Nenhum resultado encontrado",
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.titleMedium,
                             textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = if (searchQuery.isBlank()) "Registre a primeira admissão cirúrgica de enfermagem para começar." else "Tente buscar por outro termo.",
+                            text = if (searchQuery.isBlank()) {
+                                if (selectedTab == 0) "Registre a primeira admissão cirúrgica de enfermagem para começar." else "Registre a primeira evolução cirúrgica de enfermagem para começar."
+                            } else "Tente buscar por outro termo.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
                         )
                         if (searchQuery.isBlank()) {
                             Spacer(modifier = Modifier.height(16.dp))
-                            Button(onClick = onAddClick) {
-                                Text("Iniciar Admissão")
+                            Button(onClick = { onAddClick(if (selectedTab == 0) "Admissão" else "Evolução") }) {
+                                Text(if (selectedTab == 0) "Iniciar Admissão" else "Iniciar Evolução")
                             }
                         }
                     }
@@ -694,7 +726,7 @@ fun AdmissionListScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
-                    items(filteredAdmissions, key = { it.id }) { admission ->
+                    items(filteredAdmissionsByTab, key = { it.id }) { admission ->
                         PatientAdmissionCard(
                             admission = admission,
                             onClick = { onViewClick(admission) },
@@ -931,14 +963,30 @@ fun PatientAdmissionCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = admission.nome.ifBlank { "Sem Nome Informado" },
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.secondary, // Bright Cyber-Cyan key accent!
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = admission.nome.ifBlank { "Sem Nome Informado" },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.secondary, // Bright Cyber-Cyan key accent!
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            color = if (admission.recordType == "Evolução") MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = admission.recordType,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (admission.recordType == "Evolução") MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "Idade: ${admission.idade.ifBlank { "N/A" }} • Sexo: ${admission.sexo.ifBlank { "N/A" }} • Prontuário: ${admission.prontuario.ifBlank { "N/A" }}",
@@ -1888,11 +1936,12 @@ fun AdmissionFormScreen(
 ) {
     var expandedSection by remember { mutableStateOf<Int?>(0) }
     val scrollState = rememberScrollState()
+    val isEvolucao = record.recordType == "Evolução"
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (isEditMode) "Editar Admissão" else "Nova Admissão") },
+                title = { Text(if (isEditMode) "Editar ${record.recordType}" else "Nova ${record.recordType}") },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Voltar")
@@ -2101,90 +2150,92 @@ fun AdmissionFormScreen(
                     testTag = "saturacao_o2_input"
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                if (!isEvolucao) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-                Text(
-                    text = "Dados Antropométricos",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
+                    Text(
+                        text = "Dados Antropométricos",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        FormTextField(
-                            value = record.altura,
-                            onValueChange = { new -> onUpdateRecord { it.copy(altura = new) } },
-                            label = "Altura",
-                            placeholder = "Ex. 1.75 ou 175",
-                            showMic = true,
-                            testTag = "altura_input"
-                        )
-                    }
-                    Box(modifier = Modifier.weight(1f)) {
-                        FormTextField(
-                            value = record.peso,
-                            onValueChange = { new -> onUpdateRecord { it.copy(peso = new) } },
-                            label = "Peso (kg)",
-                            placeholder = "Ex. 70.5",
-                            showMic = true,
-                            testTag = "peso_input"
-                        )
-                    }
-                }
-
-                val imc = record.imcValue()
-                if (imc != null) {
-                    val classification = record.imcClassification()
-                    val imcColor = when {
-                        classification.contains("Normal") -> MaterialTheme.colorScheme.primary
-                        classification.contains("Sobrepeso") -> MaterialTheme.colorScheme.secondary
-                        else -> MaterialTheme.colorScheme.error
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            FormTextField(
+                                value = record.altura,
+                                onValueChange = { new -> onUpdateRecord { it.copy(altura = new) } },
+                                label = "Altura",
+                                placeholder = "Ex. 1.75 ou 175",
+                                showMic = true,
+                                testTag = "altura_input"
+                            )
+                        }
+                        Box(modifier = Modifier.weight(1f)) {
+                            FormTextField(
+                                value = record.peso,
+                                onValueChange = { new -> onUpdateRecord { it.copy(peso = new) } },
+                                label = "Peso (kg)",
+                                placeholder = "Ex. 70.5",
+                                showMic = true,
+                                testTag = "peso_input"
+                            )
+                        }
                     }
 
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = imcColor.copy(alpha = 0.1f)
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Row(
+                    val imc = record.imcValue()
+                    if (imc != null) {
+                        val classification = record.imcClassification()
+                        val imcColor = when {
+                            classification.contains("Normal") -> MaterialTheme.colorScheme.primary
+                            classification.contains("Sobrepeso") -> MaterialTheme.colorScheme.secondary
+                            else -> MaterialTheme.colorScheme.error
+                        }
+
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = imcColor.copy(alpha = 0.1f)
+                            ),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .padding(vertical = 8.dp),
+                            shape = RoundedCornerShape(8.dp)
                         ) {
-                            Column {
-                                Text(
-                                    text = "IMC Calculado",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = String.format("%.2f kg/m²", imc),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = imcColor
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    text = "Classificação",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = classification,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = imcColor
-                                )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "IMC Calculado",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = String.format("%.2f kg/m²", imc),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = imcColor
+                                    )
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = "Classificação",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = classification,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = imcColor
+                                    )
+                                }
                             }
                         }
                     }
@@ -3620,27 +3671,29 @@ fun AdmissionFormScreen(
                 expandedIndex = expandedSection,
                 onHeaderClick = { expandedSection = if (expandedSection == 2) null else 2 }
             ) {
-                FormTextField(
-                    value = record.doencasAnteriores,
-                    onValueChange = { new -> onUpdateRecord { it.copy(doencasAnteriores = new) } },
-                    label = "Doenças Anteriores",
-                    placeholder = "Ex. HAS, Diabetes, Insuficiência Renal, Asma",
-                    singleLine = false
-                )
-                FormTextField(
-                    value = record.historiaDoencaAtual,
-                    onValueChange = { new -> onUpdateRecord { it.copy(historiaDoencaAtual = new) } },
-                    label = "História da Doença Atual (HDA)",
-                    placeholder = "Descreva o histórico, início dos sintomas e evolução clínica do paciente",
-                    singleLine = false
-                )
-                FormTextField(
-                    value = record.cirurgiasAnteriores,
-                    onValueChange = { new -> onUpdateRecord { it.copy(cirurgiasAnteriores = new) } },
-                    label = "Cirurgias Anteriores",
-                    placeholder = "Descreva procedimentos cirúrgicos passados",
-                    singleLine = false
-                )
+                if (!isEvolucao) {
+                    FormTextField(
+                        value = record.doencasAnteriores,
+                        onValueChange = { new -> onUpdateRecord { it.copy(doencasAnteriores = new) } },
+                        label = "Doenças Anteriores",
+                        placeholder = "Ex. HAS, Diabetes, Insuficiência Renal, Asma",
+                        singleLine = false
+                    )
+                    FormTextField(
+                        value = record.historiaDoencaAtual,
+                        onValueChange = { new -> onUpdateRecord { it.copy(historiaDoencaAtual = new) } },
+                        label = "História da Doença Atual (HDA)",
+                        placeholder = "Descreva o histórico, início dos sintomas e evolução clínica do paciente",
+                        singleLine = false
+                    )
+                    FormTextField(
+                        value = record.cirurgiasAnteriores,
+                        onValueChange = { new -> onUpdateRecord { it.copy(cirurgiasAnteriores = new) } },
+                        label = "Cirurgias Anteriores",
+                        placeholder = "Descreva procedimentos cirúrgicos passados",
+                        singleLine = false
+                    )
+                }
                 FormTextField(
                     value = record.alergias,
                     onValueChange = { new -> onUpdateRecord { it.copy(alergias = new) } },
@@ -3707,48 +3760,57 @@ fun AdmissionFormScreen(
                     classification = record.bradenClassification(),
                     color = bradenClassificationColor
                 ) {
-                    Text(
-                        text = "Avalia risco para Lesão por Pressão (LPP). Um score menor indica maior risco de desenvolvimento.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    ScaleItemSelector(
-                        label = "Percepção Sensorial",
-                        selectedValue = record.bradenPercepcaoSensorial,
-                        options = bradenPercepcaoSensorialOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(bradenPercepcaoSensorial = new) } }
-                    )
-                    ScaleItemSelector(
-                        label = "Umidade",
-                        selectedValue = record.bradenUmidade,
-                        options = bradenUmidadeOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(bradenUmidade = new) } }
-                    )
-                    ScaleItemSelector(
-                        label = "Atividade",
-                        selectedValue = record.bradenAtividade,
-                        options = bradenAtividadeOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(bradenAtividade = new) } }
-                    )
-                    ScaleItemSelector(
-                        label = "Mobilidade",
-                        selectedValue = record.bradenMobilidade,
-                        options = bradenMobilidadeOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(bradenMobilidade = new) } }
-                    )
-                    ScaleItemSelector(
-                        label = "Nutrição",
-                        selectedValue = record.bradenNutricao,
-                        options = bradenNutricaoOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(bradenNutricao = new) } }
-                    )
-                    ScaleItemSelector(
-                        label = "Fricção e Cisalhamento",
-                        selectedValue = record.bradenFriccaoCisalhamento,
-                        options = bradenFriccaoCisalhamentoOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(bradenFriccaoCisalhamento = new) } }
-                    )
+                    if (!isEvolucao) {
+                        Text(
+                            text = "Avalia risco para Lesão por Pressão (LPP). Um score menor indica maior risco de desenvolvimento.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        ScaleItemSelector(
+                            label = "Percepção Sensorial",
+                            selectedValue = record.bradenPercepcaoSensorial,
+                            options = bradenPercepcaoSensorialOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(bradenPercepcaoSensorial = new) } }
+                        )
+                        ScaleItemSelector(
+                            label = "Umidade",
+                            selectedValue = record.bradenUmidade,
+                            options = bradenUmidadeOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(bradenUmidade = new) } }
+                        )
+                        ScaleItemSelector(
+                            label = "Atividade",
+                            selectedValue = record.bradenAtividade,
+                            options = bradenAtividadeOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(bradenAtividade = new) } }
+                        )
+                        ScaleItemSelector(
+                            label = "Mobilidade",
+                            selectedValue = record.bradenMobilidade,
+                            options = bradenMobilidadeOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(bradenMobilidade = new) } }
+                        )
+                        ScaleItemSelector(
+                            label = "Nutrição",
+                            selectedValue = record.bradenNutricao,
+                            options = bradenNutricaoOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(bradenNutricao = new) } }
+                        )
+                        ScaleItemSelector(
+                            label = "Fricção e Cisalhamento",
+                            selectedValue = record.bradenFriccaoCisalhamento,
+                            options = bradenFriccaoCisalhamentoOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(bradenFriccaoCisalhamento = new) } }
+                        )
+                    } else {
+                        Text(
+                            text = "Valores de perguntas ocultados na Evolução. Score e Classificação exibidos acima.",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontStyle = FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -3767,66 +3829,75 @@ fun AdmissionFormScreen(
                     classification = record.fugulinClassification(),
                     color = fugulinClassificationColor
                 ) {
-                    Text(
-                        text = "Classificação de dependência do paciente. Quanto maior o escore, maior o nível de dependência da enfermagem.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    ScaleItemSelector(
-                        label = "Estado Mental",
-                        selectedValue = record.fugulinEstadoMental,
-                        options = fugulinEstadoMentalOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(fugulinEstadoMental = new) } }
-                    )
-                    ScaleItemSelector(
-                        label = "Oxigenação",
-                        selectedValue = record.fugulinOxigenacao,
-                        options = fugulinOxigenacaoOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(fugulinOxigenacao = new) } }
-                    )
-                    ScaleItemSelector(
-                        label = "Sinais Vitais",
-                        selectedValue = record.fugulinSinaisVitais,
-                        options = fugulinSinaisVitaisOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(fugulinSinaisVitais = new) } }
-                    )
-                    ScaleItemSelector(
-                        label = "Motilidade",
-                        selectedValue = record.fugulinMotilidade,
-                        options = fugulinMotilidadeOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(fugulinMotilidade = new) } }
-                    )
-                    ScaleItemSelector(
-                        label = "Locomoção",
-                        selectedValue = record.fugulinLocomocao,
-                        options = fugulinLocomocaoOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(fugulinLocomocao = new) } }
-                    )
-                    ScaleItemSelector(
-                        label = "Cuidado Corporal",
-                        selectedValue = record.fugulinCuidadoCorporal,
-                        options = fugulinCuidadoCorporalOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(fugulinCuidadoCorporal = new) } }
-                    )
-                    ScaleItemSelector(
-                        label = "Eliminação",
-                        selectedValue = record.fugulinEliminacao,
-                        options = fugulinEliminacaoOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(fugulinEliminacao = new) } }
-                    )
-                    ScaleItemSelector(
-                        label = "Nutrição e Hidratação",
-                        selectedValue = record.fugulinNutricaoHidratacao,
-                        options = fugulinNutricaoHidratacaoOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(fugulinNutricaoHidratacao = new) } }
-                    )
-                    ScaleItemSelector(
-                        label = "Terapêutica",
-                        selectedValue = record.fugulinTerapeutica,
-                        options = fugulinTerapeuticaOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(fugulinTerapeutica = new) } }
-                    )
+                    if (!isEvolucao) {
+                        Text(
+                            text = "Classificação de dependência do paciente. Quanto maior o escore, maior o nível de dependência da enfermagem.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        ScaleItemSelector(
+                            label = "Estado Mental",
+                            selectedValue = record.fugulinEstadoMental,
+                            options = fugulinEstadoMentalOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(fugulinEstadoMental = new) } }
+                        )
+                        ScaleItemSelector(
+                            label = "Oxigenação",
+                            selectedValue = record.fugulinOxigenacao,
+                            options = fugulinOxigenacaoOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(fugulinOxigenacao = new) } }
+                        )
+                        ScaleItemSelector(
+                            label = "Sinais Vitais",
+                            selectedValue = record.fugulinSinaisVitais,
+                            options = fugulinSinaisVitaisOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(fugulinSinaisVitais = new) } }
+                        )
+                        ScaleItemSelector(
+                            label = "Motilidade",
+                            selectedValue = record.fugulinMotilidade,
+                            options = fugulinMotilidadeOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(fugulinMotilidade = new) } }
+                        )
+                        ScaleItemSelector(
+                            label = "Locomoção",
+                            selectedValue = record.fugulinLocomocao,
+                            options = fugulinLocomocaoOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(fugulinLocomocao = new) } }
+                        )
+                        ScaleItemSelector(
+                            label = "Cuidado Corporal",
+                            selectedValue = record.fugulinCuidadoCorporal,
+                            options = fugulinCuidadoCorporalOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(fugulinCuidadoCorporal = new) } }
+                        )
+                        ScaleItemSelector(
+                            label = "Eliminação",
+                            selectedValue = record.fugulinEliminacao,
+                            options = fugulinEliminacaoOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(fugulinEliminacao = new) } }
+                        )
+                        ScaleItemSelector(
+                            label = "Nutrição e Hidratação",
+                            selectedValue = record.fugulinNutricaoHidratacao,
+                            options = fugulinNutricaoHidratacaoOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(fugulinNutricaoHidratacao = new) } }
+                        )
+                        ScaleItemSelector(
+                            label = "Terapêutica",
+                            selectedValue = record.fugulinTerapeutica,
+                            options = fugulinTerapeuticaOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(fugulinTerapeutica = new) } }
+                        )
+                    } else {
+                        Text(
+                            text = "Valores de perguntas ocultados na Evolução. Score e Classificação exibidos acima.",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontStyle = FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -3843,48 +3914,57 @@ fun AdmissionFormScreen(
                     classification = record.morseClassification(),
                     color = morseClassificationColor
                 ) {
-                    Text(
-                        text = "Avalia o risco de quedas. Um escore de 45 ou superior indica alto risco físico.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    ScaleItemSelector(
-                        label = "Histórico de Quedas nos Últimos 3 Meses",
-                        selectedValue = record.morseHistoricoQuedas,
-                        options = morseHistoricoQuedasOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(morseHistoricoQuedas = new) } }
-                    )
-                    ScaleItemSelector(
-                        label = "Diagnóstico Secundário",
-                        selectedValue = record.morseDiagnosticoSecundario,
-                        options = morseDiagnosticoSecundarioOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(morseDiagnosticoSecundario = new) } }
-                    )
-                    ScaleItemSelector(
-                        label = "Auxílio na Locomoção (Deambulação)",
-                        selectedValue = record.morseAuxilioLocomocao,
-                        options = morseAuxilioLocomocaoOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(morseAuxilioLocomocao = new) } }
-                    )
-                    ScaleItemSelector(
-                        label = "Terapia Endovenosa / Dispositivo Venoso",
-                        selectedValue = record.morseTerapiaEV,
-                        options = morseTerapiaEVOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(morseTerapiaEV = new) } }
-                    )
-                    ScaleItemSelector(
-                        label = "Padrão de Marcha / Movimentação",
-                        selectedValue = record.morseMarcha,
-                        options = morseMarchaOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(morseMarcha = new) } }
-                    )
-                    ScaleItemSelector(
-                        label = "Estado Mental",
-                        selectedValue = record.morseEstadoMental,
-                        options = morseEstadoMentalOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(morseEstadoMental = new) } }
-                    )
+                    if (!isEvolucao) {
+                        Text(
+                            text = "Avalia o risco de quedas. Um escore de 45 ou superior indica alto risco físico.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        ScaleItemSelector(
+                            label = "Histórico de Quedas nos Últimos 3 Meses",
+                            selectedValue = record.morseHistoricoQuedas,
+                            options = morseHistoricoQuedasOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(morseHistoricoQuedas = new) } }
+                        )
+                        ScaleItemSelector(
+                            label = "Diagnóstico Secundário",
+                            selectedValue = record.morseDiagnosticoSecundario,
+                            options = morseDiagnosticoSecundarioOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(morseDiagnosticoSecundario = new) } }
+                        )
+                        ScaleItemSelector(
+                            label = "Auxílio na Locomoção (Deambulação)",
+                            selectedValue = record.morseAuxilioLocomocao,
+                            options = morseAuxilioLocomocaoOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(morseAuxilioLocomocao = new) } }
+                        )
+                        ScaleItemSelector(
+                            label = "Terapia Endovenosa / Dispositivo Venoso",
+                            selectedValue = record.morseTerapiaEV,
+                            options = morseTerapiaEVOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(morseTerapiaEV = new) } }
+                        )
+                        ScaleItemSelector(
+                            label = "Padrão de Marcha / Movimentação",
+                            selectedValue = record.morseMarcha,
+                            options = morseMarchaOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(morseMarcha = new) } }
+                        )
+                        ScaleItemSelector(
+                            label = "Estado Mental",
+                            selectedValue = record.morseEstadoMental,
+                            options = morseEstadoMentalOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(morseEstadoMental = new) } }
+                        )
+                    } else {
+                        Text(
+                            text = "Valores de perguntas ocultados na Evolução. Score e Classificação exibidos acima.",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontStyle = FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -3901,30 +3981,39 @@ fun AdmissionFormScreen(
                     classification = record.glasgowClassification(),
                     color = glasgowClassificationColor
                 ) {
-                    Text(
-                        text = "Avalia neurologicamente o nível de consciência (GCS). De 3 a 15 pontos.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    ScaleItemSelector(
-                        label = "Abertura Ocular",
-                        selectedValue = record.glasgowAberturaOcular,
-                        options = glasgowAberturaOcularOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(glasgowAberturaOcular = new) } }
-                    )
-                    ScaleItemSelector(
-                        label = "Resposta Verbal",
-                        selectedValue = record.glasgowRespostaVerbal,
-                        options = glasgowRespostaVerbalOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(glasgowRespostaVerbal = new) } }
-                    )
-                    ScaleItemSelector(
-                        label = "Resposta Motora",
-                        selectedValue = record.glasgowRespostaMotora,
-                        options = glasgowRespostaMotoraOptions,
-                        onValueSelected = { new -> onUpdateRecord { it.copy(glasgowRespostaMotora = new) } }
-                    )
+                    if (!isEvolucao) {
+                        Text(
+                            text = "Avalia neurologicamente o nível de consciência (GCS). De 3 a 15 pontos.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        ScaleItemSelector(
+                            label = "Abertura Ocular",
+                            selectedValue = record.glasgowAberturaOcular,
+                            options = glasgowAberturaOcularOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(glasgowAberturaOcular = new) } }
+                        )
+                        ScaleItemSelector(
+                            label = "Resposta Verbal",
+                            selectedValue = record.glasgowRespostaVerbal,
+                            options = glasgowRespostaVerbalOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(glasgowRespostaVerbal = new) } }
+                        )
+                        ScaleItemSelector(
+                            label = "Resposta Motora",
+                            selectedValue = record.glasgowRespostaMotora,
+                            options = glasgowRespostaMotoraOptions,
+                            onValueSelected = { new -> onUpdateRecord { it.copy(glasgowRespostaMotora = new) } }
+                        )
+                    } else {
+                        Text(
+                            text = "Valores de perguntas ocultados na Evolução. Score e Classificação exibidos acima.",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontStyle = FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -4100,6 +4189,31 @@ fun AdmissionFormScreen(
                                 onValueChange = { editingLesionState.value = editingLesion.copy(exsudato = it) },
                                 label = "Exsudato / Secreção",
                                 placeholder = "Ex. Ausente, Seroso, Purulento",
+                                showMic = true
+                            )
+
+                            FormTextField(
+                                value = editingLesion.descricaoAudio,
+                                onValueChange = { editingLesionState.value = editingLesion.copy(descricaoAudio = it) },
+                                label = "Descrição da Lesão (Áudio/Ditado)",
+                                placeholder = "Descreva a lesão ou clique no microfone para transcrever...",
+                                showMic = true,
+                                singleLine = false
+                            )
+
+                            FormTextField(
+                                value = editingLesion.tipoCobertura,
+                                onValueChange = { editingLesionState.value = editingLesion.copy(tipoCobertura = it) },
+                                label = "Tipo de Cobertura / Curativo",
+                                placeholder = "Ex. Alginato de Cálcio, Hidrocolóide, etc.",
+                                showMic = true
+                            )
+
+                            FormTextField(
+                                value = editingLesion.dataTroca,
+                                onValueChange = { editingLesionState.value = editingLesion.copy(dataTroca = it) },
+                                label = "Data da Troca do Curativo",
+                                placeholder = "Ex. 18/06/2026",
                                 showMic = true
                             )
                             
@@ -4289,6 +4403,12 @@ fun AdmissionFormScreen(
                                         Column(Modifier.weight(1.3f)) {
                                             Text(lesion.localizacao.ifBlank { "Sacra" }, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                             Text(lesion.tipoLesao.ifBlank { "LPP" }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            if (lesion.descricaoAudio.isNotBlank()) {
+                                                Text("🗣️ ${lesion.descricaoAudio}", style = MaterialTheme.typography.labelSmall, fontStyle = FontStyle.Italic, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            }
+                                            if (lesion.tipoCobertura.isNotBlank() || lesion.dataTroca.isNotBlank()) {
+                                                Text("🩹 ${lesion.tipoCobertura} (${lesion.dataTroca})", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            }
                                         }
                                         
                                         Column(Modifier.weight(1f)) {
