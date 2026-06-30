@@ -34,8 +34,10 @@ fun AdmissionRecord.toJsonObject(): JSONObject {
     obj.put("frequencia_respiratoria", frequenciaRespiratoria)
     obj.put("temperatura", temperatura)
     obj.put("saturacao_o2", saturacaoO2)
+    obj.put("glicemia", glicemia)
     obj.put("altura", altura)
     obj.put("peso", peso)
+    obj.put("hemocomponentes_json", hemocomponentesJson)
     obj.put("sistema_locomotor", sistemaLocomotor)
     obj.put("sistema_cardiovascular", sistemaCardiovascular)
     obj.put("sistema_respiratorio", sistemaRespiratorio)
@@ -93,6 +95,14 @@ fun AdmissionRecord.toJsonObject(): JSONObject {
     obj.put("dor_nivel", dorNivel)
     obj.put("dor_localizacao", dorLocalizacao)
     obj.put("dor_caracteristicas", dorCaracteristicas)
+    obj.put("bwat_profundidade", bwatProfundidade)
+    obj.put("bwat_bordas", bwatBordas)
+    obj.put("bwat_tecido_necrotico_tipo", bwatTecidoNecroticoTipo)
+    obj.put("bwat_tecido_necrotico_qtd", bwatTecidoNecroticoQtd)
+    obj.put("bwat_exsudato_tipo", bwatExsudatoTipo)
+    obj.put("bwat_exsudato_qtd", bwatExsudatoQtd)
+    obj.put("record_type", recordType)
+    obj.put("condutas", condutas)
     return obj
 }
 
@@ -119,8 +129,10 @@ fun JSONObject.toAdmissionRecord(): AdmissionRecord {
         frequenciaRespiratoria = this.optString("frequencia_respiratoria", ""),
         temperatura = this.optString("temperatura", ""),
         saturacaoO2 = this.optString("saturacao_o2", ""),
+        glicemia = this.optString("glicemia", ""),
         altura = this.optString("altura", ""),
         peso = this.optString("peso", ""),
+        hemocomponentesJson = this.optString("hemocomponentes_json", ""),
         sistemaLocomotor = this.optString("sistema_locomotor", ""),
         sistemaCardiovascular = this.optString("sistema_cardiovascular", ""),
         sistemaRespiratorio = this.optString("sistema_respiratorio", ""),
@@ -177,7 +189,15 @@ fun JSONObject.toAdmissionRecord(): AdmissionRecord {
         glasgowRespostaMotora = this.optInt("glasgow_resposta_motora", 6),
         dorNivel = this.optInt("dor_nivel", 0),
         dorLocalizacao = this.optString("dor_localizacao", ""),
-        dorCaracteristicas = this.optString("dor_caracteristicas", "")
+        dorCaracteristicas = this.optString("dor_caracteristicas", ""),
+        bwatProfundidade = this.optInt("bwat_profundidade", 1),
+        bwatBordas = this.optInt("bwat_bordas", 1),
+        bwatTecidoNecroticoTipo = this.optInt("bwat_tecido_necrotico_tipo", 1),
+        bwatTecidoNecroticoQtd = this.optInt("bwat_tecido_necrotico_qtd", 1),
+        bwatExsudatoTipo = this.optInt("bwat_exsudato_tipo", 1),
+        bwatExsudatoQtd = this.optInt("bwat_exsudato_qtd", 1),
+        recordType = this.optString("record_type", "Admissão"),
+        condutas = this.optString("condutas", "")
     )
 }
 

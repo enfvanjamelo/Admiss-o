@@ -332,7 +332,7 @@ class AdmissionViewModel(application: Application) : AndroidViewModel(applicatio
     private val _aiLoading = MutableStateFlow(false)
     val aiLoading: StateFlow<Boolean> = _aiLoading.asStateFlow()
 
-    private val _isDarkTheme = MutableStateFlow(true)
+    private val _isDarkTheme = MutableStateFlow(false)
     val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
 
     private val _syncStatus = MutableStateFlow("")

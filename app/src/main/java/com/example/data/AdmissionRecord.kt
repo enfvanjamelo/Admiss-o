@@ -28,8 +28,10 @@ data class AdmissionRecord(
     val frequenciaRespiratoria: String = "",
     val temperatura: String = "",
     val saturacaoO2: String = "",
+    val glicemia: String = "",
     val altura: String = "",
     val peso: String = "",
+    val hemocomponentesJson: String = "",
     
     // 2. Sistemas Orgânicos & Dispositivos
     val sistemaLocomotor: String = "",
@@ -104,7 +106,17 @@ data class AdmissionRecord(
     // 9. Escala de Dor
     val dorNivel: Int = 0,
     val dorLocalizacao: String = "",
-    val dorCaracteristicas: String = ""
+    val dorCaracteristicas: String = "",
+    
+    // 10. Escala de Bates-Jensen (BWAT)
+    val bwatProfundidade: Int = 1,
+    val bwatBordas: Int = 1,
+    val bwatTecidoNecroticoTipo: Int = 1,
+    val bwatTecidoNecroticoQtd: Int = 1,
+    val bwatExsudatoTipo: Int = 1,
+    val bwatExsudatoQtd: Int = 1,
+    
+    val condutas: String = ""
 ) {
     // Calculators
     fun bradenScore(): Int = bradenPercepcaoSensorial + bradenUmidade + bradenAtividade +
@@ -144,6 +156,18 @@ data class AdmissionRecord(
             score <= 24 -> "Baixo Risco"
             score in 25..44 -> "Risco Moderado"
             else -> "Alto Risco"
+        }
+    }
+
+    fun bwatScore(): Int = bwatProfundidade + bwatBordas + bwatTecidoNecroticoTipo +
+            bwatTecidoNecroticoQtd + bwatExsudatoTipo + bwatExsudatoQtd
+
+    fun bwatClassification(): String {
+        val score = bwatScore()
+        return when {
+            score <= 10 -> "Regeneração Ativa / Saudável"
+            score in 11..20 -> "Regeneração Estagnada"
+            else -> "Ferida Grave / Degenerativa"
         }
     }
 
@@ -300,6 +324,88 @@ data class AdmissionRecord(
         return this.copy(dispositivosJson = arr.toString())
     }
 
+    fun getHemocomponentesList(): List<HemocomponenteItem> {
+        val defaultList = listOf(
+            HemocomponenteItem("CH"),
+            HemocomponenteItem("CP"),
+            HemocomponenteItem("PFC"),
+            HemocomponenteItem("CRIO"),
+            HemocomponenteItem("CG")
+        )
+        if (hemocomponentesJson.isBlank()) {
+            return defaultList
+        }
+        return try {
+            val list = mutableListOf<HemocomponenteItem>()
+            val arr = org.json.JSONArray(hemocomponentesJson)
+            val map = mutableMapOf<String, HemocomponenteItem>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                var tipo = obj.optString("tipo", "")
+                if (tipo.trim().uppercase() == "CHORAR") {
+                    tipo = "CRIO"
+                }
+                if (tipo.isNotBlank()) {
+                    map[tipo] = HemocomponenteItem(
+                        tipo = tipo,
+                        selecionado = obj.optBoolean("selecionado", false),
+                        diaHemotransfusao = obj.optString("diaHemotransfusao", ""),
+                        numeroBolsa = obj.optString("numeroBolsa", ""),
+                        validade = obj.optString("validade", ""),
+                        tipagemSanguinea = obj.optString("tipagemSanguinea", ""),
+                        volumeInfundido = obj.optString("volumeInfundido", ""),
+                        reacaoTransfusional = obj.optString("reacaoTransfusional", "Não"),
+                        reacaoQuais = obj.optString("reacaoQuais", ""),
+                        inicioPA = obj.optString("inicioPA", ""),
+                        inicioFC = obj.optString("inicioFC", ""),
+                        inicioFR = obj.optString("inicioFR", ""),
+                        inicioT = obj.optString("inicioT", ""),
+                        inicioSatO2 = obj.optString("inicioSatO2", ""),
+                        fimPA = obj.optString("fimPA", ""),
+                        fimFC = obj.optString("fimFC", ""),
+                        fimFR = obj.optString("fimFR", ""),
+                        fimT = obj.optString("fimT", ""),
+                        fimSatO2 = obj.optString("fimSatO2", "")
+                    )
+                }
+            }
+            defaultList.map { defaultItem ->
+                map[defaultItem.tipo] ?: defaultItem
+            }
+        } catch (e: Exception) {
+            defaultList
+        }
+    }
+
+    fun withUpdatedHemocomponentes(list: List<HemocomponenteItem>): AdmissionRecord {
+        val arr = org.json.JSONArray()
+        for (item in list) {
+            val obj = org.json.JSONObject().apply {
+                put("tipo", item.tipo)
+                put("selecionado", item.selecionado)
+                put("diaHemotransfusao", item.diaHemotransfusao)
+                put("numeroBolsa", item.numeroBolsa)
+                put("validade", item.validade)
+                put("tipagemSanguinea", item.tipagemSanguinea)
+                put("volumeInfundido", item.volumeInfundido)
+                put("reacaoTransfusional", item.reacaoTransfusional)
+                put("reacaoQuais", item.reacaoQuais)
+                put("inicioPA", item.inicioPA)
+                put("inicioFC", item.inicioFC)
+                put("inicioFR", item.inicioFR)
+                put("inicioT", item.inicioT)
+                put("inicioSatO2", item.inicioSatO2)
+                put("fimPA", item.fimPA)
+                put("fimFC", item.fimFC)
+                put("fimFR", item.fimFR)
+                put("fimT", item.fimT)
+                put("fimSatO2", item.fimSatO2)
+            }
+            arr.put(obj)
+        }
+        return this.copy(hemocomponentesJson = arr.toString())
+    }
+
     fun getLesionsList(): List<SkinLesionRow> {
         if (lesionsSpreadsheetJson.isBlank()) return emptyList()
         return try {
@@ -321,7 +427,8 @@ data class AdmissionRecord(
                         fotoUri = if (obj.isNull("fotoUri")) null else obj.optString("fotoUri"),
                         descricaoAudio = obj.optString("descricaoAudio", ""),
                         tipoCobertura = obj.optString("tipoCobertura", ""),
-                        dataTroca = obj.optString("dataTroca", "")
+                        dataTroca = obj.optString("dataTroca", ""),
+                        classificacaoJanetJensey = obj.optString("classificacaoJanetJensey", "")
                     )
                 )
             }
@@ -348,6 +455,7 @@ data class AdmissionRecord(
                 put("descricaoAudio", item.descricaoAudio)
                 put("tipoCobertura", item.tipoCobertura)
                 put("dataTroca", item.dataTroca)
+                put("classificacaoJanetJensey", item.classificacaoJanetJensey)
             }
             arr.put(obj)
         }
@@ -355,167 +463,14 @@ data class AdmissionRecord(
     }
 
     fun generateReport(): String {
-        val dateFormat = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault())
-        val dataFormatada = dateFormat.format(java.util.Date(timestamp))
+        val dateFormat = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
+        val hourFormat = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+        val dataStr = dateFormat.format(java.util.Date(timestamp))
+        val horaStr = hourFormat.format(java.util.Date(timestamp))
+        val dataFormatada = "$dataStr $horaStr"
         
         val isEvolucao = recordType == "Evolução"
         val lesions = getLesionsList()
-        val lesionsTable = if (lesions.isNotEmpty()) {
-            val sb = java.lang.StringBuilder("\nVI. MONITORAMENTO E PLANILHA DE LESÕES CUTÂNEAS\n--------------------------------------------------------------------------------\n")
-            for ((index, l) in lesions.withIndex()) {
-                val dims = "${l.larguraCm}x${l.comprimentoCm} cm"
-                val areaStr = if (l.areaCm2.isNotBlank()) " (Área: ${l.areaCm2} cm²)" else ""
-                sb.append("• Lesão #${index + 1}:\n")
-                sb.append("  - Data Registro: ${l.dataRegistro}\n")
-                sb.append("  - Localização: ${l.localizacao}\n")
-                sb.append("  - Tipo de Lesão: ${l.tipoLesao}\n")
-                sb.append("  - Dimensões: $dims$areaStr\n")
-                sb.append("  - Padrão Tecidual: ${l.tipoTecido} | Exsudato: ${l.exsudato}\n")
-                if (l.tipoCobertura.isNotBlank()) sb.append("  - Cobertura/Curativo: ${l.tipoCobertura}\n")
-                if (l.dataTroca.isNotBlank()) sb.append("  - Data da Próxima Troca: ${l.dataTroca}\n")
-                if (l.descricaoAudio.isNotBlank()) sb.append("  - Transcrição do Áudio / Descrição: ${l.descricaoAudio}\n")
-                sb.append("\n")
-            }
-            sb.append("--------------------------------------------------------------------------------\n")
-            sb.toString()
-        } else ""
-
-        // Section I: Identification and Sinais Vitais (Only non-blank items)
-        val idDetails = mutableListOf<String>()
-        if (nome.isNotBlank()) idDetails.add("• Paciente: $nome")
-        if (idade.isNotBlank()) idDetails.add("• Faixa Etária/Idade: $idade anos")
-        if (sexo.isNotBlank()) idDetails.add("• Gênero: $sexo")
-        if (!isEvolucao && religiao.isNotBlank()) idDetails.add("• Crença Religiosa: $religiao")
-        if (!isEvolucao && estadoCivil.isNotBlank()) idDetails.add("• Status Civil: $estadoCivil")
-        if (!isEvolucao && funcaoLaboral.isNotBlank()) idDetails.add("• Atividade Laboral: $funcaoLaboral")
-        if (!isEvolucao && proveniencia.isNotBlank()) idDetails.add("• Proveniência Clínica: $proveniencia")
-        if (prontuario.isNotBlank()) idDetails.add("• Prontuário Clínico: nº $prontuario")
-        if (enfermaria.isNotBlank()) idDetails.add("• Enfermaria: $enfermaria")
-        if (leito.isNotBlank()) idDetails.add("• Leito: $leito")
-        if (tipoCirurgia.isNotBlank()) idDetails.add("• Procedimento Cirúrgico Proposto: $tipoCirurgia")
-
-        val svDetails = mutableListOf<String>()
-        if (pressaoArterial.isNotBlank()) svDetails.add("  - Pressão Arterial (PA): $pressaoArterial mmHg")
-        if (frequenciaCardiaca.isNotBlank()) {
-            val fcVal = frequenciaCardiaca.replace(Regex("[^0-9]"), "").toIntOrNull()
-            val classification = if (fcVal != null) {
-                when {
-                    fcVal < 60 -> "bradicardia"
-                    fcVal > 100 -> "taquicardia"
-                    else -> "normotensivo/eucardia"
-                }
-            } else "regularidade rítmica"
-            svDetails.add("  - Frequência Cardíaca (FC): $frequenciaCardiaca bpm ($classification)")
-        }
-        if (frequenciaRespiratoria.isNotBlank()) {
-            val frVal = frequenciaRespiratoria.replace(Regex("[^0-9]"), "").toIntOrNull()
-            val classification = if (frVal != null) {
-                when {
-                    frVal < 12 -> "bradipcneia"
-                    frVal > 20 -> "taquipneia"
-                    else -> "eupneia/padrão ventilatório estável"
-                }
-            } else "ritmicidade respiratória"
-            svDetails.add("  - Frequência Respiratória (FR): $frequenciaRespiratoria ipm ($classification)")
-        }
-        if (temperatura.isNotBlank()) {
-            val tVal = temperatura.replace(",", ".").replace(Regex("[^0-9.]"), "").toDoubleOrNull()
-            val classification = if (tVal != null) {
-                when {
-                    tVal < 35.0 -> "hipotermia severa/moderada"
-                    tVal >= 37.8 -> "estado febril/piréxia"
-                    tVal >= 37.3 -> "subfebril"
-                    else -> "afebril/normotermia"
-                }
-            } else "termorregulação cutânea"
-            svDetails.add("  - Temperatura Corporal (T): $temperatura ºC ($classification)")
-        }
-        if (saturacaoO2.isNotBlank()) {
-            val satVal = saturacaoO2.replace(Regex("[^0-9]"), "").toIntOrNull()
-            val classification = if (satVal != null) {
-                if (satVal < 95) "indício de hipoxemia" else "perfusão periférica de oxigênio adequada"
-            } else "preservação tecidual"
-            svDetails.add("  - Saturação de Oxigênio (SatO2): $saturacaoO2% ($classification)")
-        }
-        if (!isEvolucao) {
-            if (altura.isNotBlank()) svDetails.add("  - Altura: $altura")
-            if (peso.isNotBlank()) svDetails.add("  - Peso: $peso")
-            if (imcValue() != null) {
-                svDetails.add("  - IMC: ${String.format("%.2f kg/m²", imcValue())} (${imcClassification()})")
-            }
-        }
-
-        // Section II: Anamnese / Historico (Only non-blank items)
-        val histDetails = mutableListOf<String>()
-        if (!isEvolucao && doencasAnteriores.isNotBlank()) histDetails.add("• Doenças Prévias/Comorbidades: $doencasAnteriores")
-        if (!isEvolucao && historiaDoencaAtual.isNotBlank()) histDetails.add("• História da Doença Atual (HDA): $historiaDoencaAtual")
-        if (!isEvolucao && cirurgiasAnteriores.isNotBlank()) histDetails.add("• Antecedentes Cirúrgicos: $cirurgiasAnteriores")
-        if (alergias.isNotBlank()) histDetails.add("• Quadro Alérgico (Hipersensibilidade): $alergias")
-        if (medicacoesUso.isNotBlank()) histDetails.add("• Farmacologia em Uso Contínuo: $medicacoesUso")
-        if (exames.isNotBlank()) histDetails.add("• Investigação Diagnóstica (Exames): $exames")
-
-        // Section III: Exame Fisico (Exame Sistemico) concatenated
-        val activeDispositivos = getDispositivosList().filter { it.selecionado }
-        val dispText = if (activeDispositivos.isNotEmpty()) {
-            val dList = activeDispositivos.map { item ->
-                when (item.tipo) {
-                    "AVP" -> "AVP (Acesso Venoso Periférico) lado ${item.lado.ifBlank { "N/I" }} puncionado em ${item.dataPuncao.ifBlank { "N/I" }}"
-                    "CVC" -> {
-                        val details = mutableListOf<String>()
-                        if (item.lado.isNotBlank()) details.add("sítio ${item.lado}")
-                        if (item.dataPuncao.isNotBlank()) details.add("punção em ${item.dataPuncao}")
-                        if (item.curativoTipo.isNotBlank()) details.add("curativo ${item.curativoTipo}")
-                        if (item.dataTroca.isNotBlank()) details.add("troca em ${item.dataTroca}")
-                        if (item.dataRetirada.isNotBlank()) details.add("retirada em ${item.dataRetirada}")
-                        "CVC (Acesso Venoso Central) com ${details.joinToString(", ")}"
-                    }
-                    "FAV MS" -> "FAV MS (Fístula Arteriovenosa em Membro Superior) lado ${item.lado.ifBlank { "N/I" }}"
-                    "CAT HD" -> "CAT HD (Cateter de Hemodiálise) sítio ${item.lado.ifBlank { "N/I" }}"
-                    else -> item.tipo
-                }
-            }
-            "dispositivos invasivos: ${dList.joinToString(", ")}" + if (dispositivos.isNotBlank()) ", outros: $dispositivos" else ""
-        } else {
-            if (dispositivos.isNotBlank()) "dispositivos invasivos: $dispositivos" else ""
-        }
-
-        val activeDrenos = getDrenosList().filter { it.selecionado }
-        val drenosText = if (activeDrenos.isNotEmpty()) {
-            val drList = activeDrenos.map { item ->
-                val ladoStr = if (item.lado.isNotBlank()) " lado ${item.lado}" else ""
-                "dreno ${item.tipo}$ladoStr com débito ${item.debito.ifBlank { "não informado" }} e aspecto ${item.aspecto.ifBlank { "não informado" }}"
-            }
-            "drenos ativos: ${drList.joinToString(", ")}"
-        } else ""
-
-        val examItems = mutableListOf<String>()
-        if (sistemaLocomotor.isNotBlank()) examItems.add(sistemaLocomotor.trim().removeSuffix(";").removeSuffix("."))
-        if (sistemaCardiovascular.isNotBlank()) examItems.add(sistemaCardiovascular.trim().removeSuffix(";").removeSuffix("."))
-        if (sistemaRespiratorio.isNotBlank()) examItems.add(sistemaRespiratorio.trim().removeSuffix(";").removeSuffix("."))
-        if (sistemaNeurologico.isNotBlank()) examItems.add(sistemaNeurologico.trim().removeSuffix(";").removeSuffix("."))
-        if (sistemaNutricao.isNotBlank()) examItems.add(sistemaNutricao.trim().removeSuffix(";").removeSuffix("."))
-        if (sistemaUrinario.isNotBlank()) examItems.add(sistemaUrinario.trim().removeSuffix(";").removeSuffix("."))
-        if (sistemaIntestinal.isNotBlank()) examItems.add(sistemaIntestinal.trim().removeSuffix(";").removeSuffix("."))
-        if (sistemaIntegridadePele.isNotBlank()) {
-            var skinText = sistemaIntegridadePele.trim().removeSuffix(";").removeSuffix(".")
-            if (!lesionWidthCm.isNullOrBlank()) {
-                skinText += ", planimetria volumétrica da lesão principal: ${lesionWidthCm}x${lesionHeightCm} cm (área estimada: ${lesionAreaSquareCm} cm²), características morfológicas: $lesionDescriptionPlanimetria"
-            }
-            examItems.add(skinText)
-        }
-        if (dispText.isNotBlank()) examItems.add(dispText)
-        if (drenosText.isNotBlank()) examItems.add(drenosText)
-
-        // Section IV: Sensório-Cognitiva
-        val sensoryDetails = mutableListOf<String>()
-        if (acuidadeVisual.isNotBlank()) sensoryDetails.add("• Acuidade Visual: $acuidadeVisual")
-        if (acuidadeAuditiva.isNotBlank()) sensoryDetails.add("• Acuidade Auditiva: $acuidadeAuditiva")
-
-        // Section V: Escalas - Dor details
-        val dorDetails = mutableListOf<String>()
-        dorDetails.add("• Nível de Intensidade Álgica: $dorNivel / 10 (${dorClassification().uppercase()})")
-        if (dorLocalizacao.isNotBlank()) dorDetails.add("• Localização Anatômica: $dorLocalizacao")
-        if (dorCaracteristicas.isNotBlank()) dorDetails.add("• Características Clínicas da Dor: $dorCaracteristicas")
 
         val sb = java.lang.StringBuilder()
         sb.append("================================================================================\n")
@@ -527,87 +482,158 @@ data class AdmissionRecord(
         sb.append("================================================================================\n")
         sb.append("REGISTRO DE SISTEMATIZAÇÃO DA ASSISTÊNCIA DE ENFERMAGEM | DATA/HORA: $dataFormatada\n\n")
 
-        if (idDetails.isNotEmpty() || svDetails.isNotEmpty()) {
-            sb.append("I. IDENTIFICAÇÃO E DADOS CLÍNICOS DO PACIENTE\n")
-            sb.append("--------------------------------------------------------------------------------\n")
-            idDetails.forEach { sb.append(it).append("\n") }
-            if (svDetails.isNotEmpty()) {
-                sb.append("\n* SINAIS VITAIS (REGISTRO FISIOLÓGICO DE ")
-                if (isEvolucao) sb.append("ACOMPANHAMENTO):\n") else sb.append("ADMISSÃO):\n")
-                svDetails.forEach { sb.append(it).append("\n") }
-            }
-            sb.append("\n")
-        }
-
-        if (histDetails.isNotEmpty()) {
-            sb.append("II. ANAMNESE E HISTÓRICO PATOLÓGICO SELECIONADO\n")
-            sb.append("--------------------------------------------------------------------------------\n")
-            histDetails.forEach { sb.append(it).append("\n") }
-            sb.append("\n")
-        }
-
-        if (examItems.isNotEmpty()) {
-            sb.append("III. EXAME FÍSICO COM PREDOMÍNIO DE TERMOS TÉCNICOS (EXAME SISTÊMICO)\n")
-            sb.append("--------------------------------------------------------------------------------\n")
-            sb.append(examItems.joinToString("; ")).append(".\n\n")
-        }
-
-        if (sensoryDetails.isNotEmpty()) {
-            sb.append("IV. AVALIAÇÃO SENSÓRIO-COGNITIVA\n")
-            sb.append("--------------------------------------------------------------------------------\n")
-            sensoryDetails.forEach { sb.append(it).append("\n") }
-            sb.append("\n")
-        }
-
-        sb.append("V. ESTRATIFICAÇÃO DE RISCO CLÍNICO E ESCALAS MULTIDIMENSIONAL\n")
+        sb.append("EVOLUÇÃO CLÍNICA NARRATIVA E RELATÓRIO PADRONIZADO:\n")
         sb.append("--------------------------------------------------------------------------------\n")
-        
+
+        val nomeStr = nome.ifBlank { "_____" }
+        val idadeStr = idade.ifBlank { "____" }
+        val sexoStr = sexo.ifBlank { "_____" }
+        val estadoCivilStr = estadoCivil.ifBlank { "_____" }
+        val profissaoStr = funcaoLaboral.ifBlank { "_____" }
+        val religiaoStr = religiao.ifBlank { "_____" }
+        val provTexto = proveniencia.ifBlank { "domicílio" }
+        val tipoCirurgiaStr = tipoCirurgia.ifBlank { "_____" }
+        val enfermariaStr = enfermaria.ifBlank { "____" }
+        val leitoStr = leito.ifBlank { "____" }
+
+        // 1. Cabecalho Identificacao
         if (isEvolucao) {
-            sb.append("• ESCALA DE BRADEN (Risco de LPP): ${bradenScore()} / 23 pontos (${bradenClassification().uppercase()})\n")
-            sb.append("• ESCALA DE FUGULIN (Dependência): ${fugulinScore()} / 36 pontos (${fugulinClassification().uppercase()})\n")
-            sb.append("• ESCALA DE MORSE (Quedas): ${morseScore()} pontos (${morseClassification().uppercase()})\n")
-            sb.append("• ESCALA DE COMA DE GLASGOW: ${glasgowScore()} / 15 pontos (${glasgowClassification().uppercase()})\n")
-            sb.append("• ESCALA VISUAL ANALÓGICA DA DOR (EVA):\n")
-            dorDetails.forEach { sb.append("  ").append(it).append("\n") }
-            sb.append("\n")
+            sb.append("$nomeStr, $idadeStr anos, sexo $sexoStr (Enfermaria: $enfermariaStr, Leito: $leitoStr), admitido nesta unidade de internação cirúrgica para realização de $tipoCirurgiaStr em $dataStr às ${horaStr}h.\n\n")
         } else {
-            sb.append("A) ESCALA DE BRADEN (Avaliação de Risco para Lesão por Pressão - LPP):\n")
-            sb.append("   • Critério Sensorial: $bradenPercepcaoSensorial | Umidade: $bradenUmidade | Atividade: $bradenAtividade\n")
-            sb.append("   • Mobilidade: $bradenMobilidade | Nutrição: $bradenNutricao | Fricção e Cisalhamento: $bradenFriccaoCisalhamento\n")
-            sb.append("   • ESCORE TOTAL DE BRADEN: ${bradenScore()} / 23 pontos\n")
-            sb.append("   • DIAGNÓSTICO DE RISCO (Braden): ${bradenClassification().uppercase()}\n\n")
-
-            sb.append("B) ESCALA DE FUGULIN (Estratificação de Grau de Dependência Assistencial da Enfermagem):\n")
-            sb.append("   • Estado Mental: $fugulinEstadoMental | Oxigenação: $fugulinOxigenacao | Sinais Vitais: $fugulinSinaisVitais\n")
-            sb.append("   • Motilidade: $fugulinMotilidade | Locomoção: $fugulinLocomocao | Cuidado Corporal: $fugulinCuidadoCorporal\n")
-            sb.append("   • Eliminação: $fugulinEliminacao | Nutrição/Hidratação: $fugulinNutricaoHidratacao | Terapêutica: $fugulinTerapeutica\n")
-            sb.append("   • ESCORE TOTAL DE FUGULIN: ${fugulinScore()} / 36 pontos\n")
-            sb.append("   • COMPLEXIDADE DA ASSISTÊNCIA: ${fugulinClassification().uppercase()}\n\n")
-
-            sb.append("C) ESCALA DE MORSE (Predisposição e Risco de Evento de Quedas):\n")
-            sb.append("   • Historial de Queda Recente: $morseHistoricoQuedas | Diagnóstico Secundário: $morseDiagnosticoSecundario\n")
-            sb.append("   • Suporte para Deambulação: $morseAuxilioLocomocao | Terapia Endovenosa Ativa: $morseTerapiaEV\n")
-            sb.append("   • Padrão de Marcha Corporal: $morseMarcha | Estado Mental Cognitivo: $morseEstadoMental\n")
-            sb.append("   • ESCORE TOTAL DE MORSE: ${morseScore()} pontos\n")
-            sb.append("   • PROTOCOLO DE PREVENÇÃO (Morse): ${morseClassification().uppercase()}\n\n")
-
-            sb.append("D) ESCALA DE COMA DE GLASGOW (Nível de Reatividade Neurológica):\n")
-            sb.append("   • Abertura Ocular: $glasgowAberturaOcular | Resposta Verbal: $glasgowRespostaVerbal | Resposta Motora: $glasgowRespostaMotora\n")
-            sb.append("   • ESCORE TOTAL DE GLASGOW: ${glasgowScore()} / 15 pontos (${glasgowClassification().uppercase()})\n\n")
-
-            sb.append("E) ESCALA VISUAL ANALÓGICA DA DOR (EVA - Semioticamente Estruturada):\n")
-            dorDetails.forEach { sb.append("   ").append(it).append("\n") }
+            sb.append("$nomeStr, $idadeStr anos, sexo $sexoStr, estado civil $estadoCivilStr, profissão $profissaoStr, religião $religiaoStr, veio proveniente do $provTexto, admitido nesta unidade de internação cirúrgica para realização de $tipoCirurgiaStr em $dataStr às ${horaStr}h.\n\n")
         }
 
-        if (lesionsTable.isNotBlank()) {
-            sb.append("\n").append(lesionsTable)
+        // 2. Itens Cadastrados
+        val temProtese = dispositivos.contains("prótese", ignoreCase = true) || 
+                         sistemaNeurologico.contains("prótese", ignoreCase = true) || 
+                         sistemaLocomotor.contains("prótese", ignoreCase = true)
+        val temTabagismo = historiaDoencaAtual.contains("tabac", ignoreCase = true) || 
+                           historiaDoencaAtual.contains("etil", ignoreCase = true) || 
+                           doencasAnteriores.contains("tabac", ignoreCase = true) || 
+                           doencasAnteriores.contains("etil", ignoreCase = true)
+
+        sb.append("- CMB: ${doencasAnteriores.ifBlank { "Não informado" }}\n")
+        sb.append("- Cirurgias anteriores: ${cirurgiasAnteriores.ifBlank { "Nenhuma relatada" }}\n")
+        sb.append("- Alergias: ${alergias.ifBlank { "Sem alergias conhecidas" }}\n")
+        sb.append("- Próteses dentária e outras: ${if (temProtese) "Sim" else "Nenhuma relatada" }\n")
+        sb.append("- Acuidade visual e auditiva: Visual: ${acuidadeVisual.ifBlank { "Normal" }} | Auditiva: ${acuidadeAuditiva.ifBlank { "Normal" }}\n")
+        sb.append("- Tabagista/Etilista: ${if (temTabagismo) "Sim" else "Não informado ou Nega" }\n")
+        sb.append("- Medicações em uso: ${medicacoesUso.ifBlank { "Não informado" }}\n")
+        sb.append("- Episódio de queda recente: ${if (morseHistoricoQuedas == 25) "Sim" else "Não" }\n\n")
+
+        // 3. Exame Fisico e Evolutivo Narrativo
+        val neurologicoStr = sistemaNeurologico.ifBlank { "consciência, orientado, verbalizando suas necessidades" }
+        val locomotorStr = locomocaoMobilidade.ifBlank { "deambulando sem auxílio" }
+        val peleIntegridadeStr = sistemaIntegridadePele.ifBlank { "Pele íntegra para LP" }
+        val dietaStr = sistemaNutricao.ifBlank { "Dieta VO líquida restrita, com boa aceitação" }
+        val urinarioStr = sistemaUrinario.ifBlank { "Diurese espontânea" }
+        val intestinalStr = sistemaIntestinal.ifBlank { "evacuações ausentes" }
+
+        val pressaoStr = pressaoArterial.ifBlank { "120/80" }
+        val tempStr = temperatura.ifBlank { "36.5" }
+        val frStr = frequenciaRespiratoria.ifBlank { "18" }
+        val fcStr = frequenciaCardiaca.ifBlank { "80" }
+        val satStr = saturacaoO2.ifBlank { "98" }
+
+        sb.append("Evolui ${neurologicoStr.lowercase().trim().removeSuffix(".")}, ${locomotorStr.lowercase().trim().removeSuffix(".")}, normocorado, anictérico, normotenso ($pressaoStr mmHg), afebril ($tempStr ºC), eupneico ($frStr ipm) em AA (SatO2: $satStr%).\n")
+        sb.append("Pele: ${peleIntegridadeStr.trim().removeSuffix(".")}.\n")
+        sb.append("Nutrição: ${dietaStr.trim().removeSuffix(".")}.\n")
+        sb.append("Eliminações: ${urinarioStr.trim().removeSuffix(".")} e ${intestinalStr.trim().removeSuffix(".")}.\n")
+        sb.append("Sono e repouso satisfatórios.\n\n")
+
+        // 4. Dispositivos e Acessos Venosos
+        val activeDispositivos = getDispositivosList().filter { it.selecionado }
+        if (activeDispositivos.isNotEmpty()) {
+            val dispLines = activeDispositivos.map { item ->
+                val dateVal = item.dataPuncao.ifBlank { "____/____/____" }
+                when (item.tipo) {
+                    "AVP" -> "AVP em ${item.lado.ifBlank { "MS" }} ($dateVal), pérvio e sem sinais flogísticos"
+                    "CVC" -> "CVC em ${item.lado.ifBlank { "sítio" }} ($dateVal), curativo ${item.curativoTipo.ifBlank { "convencional" }}, pérvio"
+                    "FAV MS" -> "FAV MS em ${item.lado.ifBlank { "Membro Superior" }} ($dateVal)"
+                    "CAT HD" -> "CAT HD em ${item.lado.ifBlank { "sítio" }} ($dateVal)"
+                    else -> "${item.tipo} em ${item.lado.ifBlank { "sítio" }} ($dateVal)"
+                }
+            }
+            sb.append("${dispLines.joinToString(" ou ")}.\n")
+        } else {
+            sb.append("AVP em MD (____/____/____), pérvio e sem sinais flogísticos.\n")
         }
 
+        // 5. Drenos
+        val activeDrenos = getDrenosList().filter { it.selecionado }
+        if (activeDrenos.isNotEmpty()) {
+            sb.append("- Presença de dreno: Sim\n")
+            for (d in activeDrenos) {
+                sb.append("- Presença de dreno tipo ${d.tipo} (Local: ${d.lado.ifBlank { "região do procedimento" }}, aspecto ${d.aspecto.ifBlank { "seroso" }} com débito de ${d.debito.ifBlank { "____" }} ml)\n")
+            }
+        } else {
+            sb.append("- Presença de dreno: Não\n")
+        }
+
+        // 6. Ferida Operatoria (FO)
+        if (lesions.isNotEmpty()) {
+            val foLines = lesions.map { l ->
+                val loc = l.localizacao.ifBlank { "região cirúrgica" }
+                val cob = l.tipoCobertura.ifBlank { "cobertura convencional" }
+                val tr = l.dataTroca.ifBlank { "conforme protocolo" }
+                val janet = if (l.classificacaoJanetJensey.isNotBlank()) " Classificação: ${l.classificacaoJanetJensey}." else ""
+                "FO $loc: curativo tipo $cob, próxima troca $tr, padrão: ${l.tipoTecido.ifBlank { "limpo" }}, exsudato: ${l.exsudato.ifBlank { "ausente" }}.$janet"
+            }
+            sb.append("FO ${foLines.joinToString("; ")}\n\n")
+        } else {
+            sb.append("FO: Região cirúrgica íntegra, sem ferida operatória exposta.\n\n")
+        }
+
+        // 7. Queixas e Alteracoes
+        val qpVal = if (historiaDoencaAtual.isNotBlank()) historiaDoencaAtual else if (dorLocalizacao.isNotBlank()) "Dor nível $dorNivel em $dorLocalizacao ($dorCaracteristicas)" else "Estável, sem queixas álgicas no momento."
+        val altVal = if (descricaoLesoes.isNotBlank()) descricaoLesoes else "Sem intercorrências ou alterações declaradas."
+        sb.append("- Queixas principais: $qpVal\n")
+        sb.append("- Alguma alteração: $altVal\n\n")
+
+        // 8. Cuidados de Enfermagem, Exames, Escalas, Altura/Peso, Condutas
+        sb.append("Segue em cuidado de Enfermagem\n")
+        sb.append("- Exames a realizar/apresentados: ${exames.ifBlank { "Sem exames pendentes ou informados" }}\n")
+        sb.append("- Dados das escalas:\n")
+        sb.append("  • Escala de Braden (Risco de LPP): ${bradenScore()} pontos (${bradenClassification().uppercase()})\n")
+        sb.append("  • Escala de Fugulin (Dependência): ${fugulinScore()} pontos (${fugulinClassification().uppercase()})\n")
+        sb.append("  • Escala de Quedas (Morse): ${morseScore()} pontos (${morseClassification().uppercase()})\n")
+        sb.append("  • Escala de Bates-Jensen (Feridas): ${bwatScore()} pontos (${bwatClassification().uppercase()})\n")
+        sb.append("  • Escala de Coma de Glasgow: ${glasgowScore()} / 15 (${glasgowClassification().uppercase()})\n")
+        sb.append("  • Escala de Dor (EVA): ${dorNivel} / 10 (${dorClassification().uppercase()})\n")
+        sb.append("Peso e Altura: ${peso.ifBlank { "___" }} kg | ${altura.ifBlank { "___" }} m\n\n")
+
+        val condutasTexto = if (condutas.isNotBlank()) {
+            condutas
+        } else if (recordType == "Encaminhamento Centro Cirúrgico") {
+            "Realizado escalas de Braden, Fugulin e de Morse. Realizado banho com clorexidina degermante, esvaziamento da bexiga, retirada de adornos, peças íntimas e próteses. Anexado exames. Encaminhado paciente para o centro cirúrgico."
+        } else {
+            "Orientado quanto a prevenção de quedas, realizado escalas e explicado preparo pré-operatório conforme protocolo do hospital. Preenchido escalas de Braden, Fugulin e Quedas. Feito SAE diária."
+        }
+        sb.append("- Condutas: $condutasTexto\n")
+
+        // 9. Extra detailed parts if available (Gemini AI interventions and Hemotherapy)
         if (aiInterventionsResult.isNotBlank()) {
             sb.append("\n================================================================================\n")
             sb.append("  DIRETRIZES TERAPÊUTICAS E INTERVENÇÕES DA ASSISTÊNCIA (IA - GEMINI)\n")
             sb.append("================================================================================\n")
             sb.append(aiInterventionsResult).append("\n")
+        }
+
+        val selectedHemocomponentes = getHemocomponentesList().filter { it.selecionado }
+        if (selectedHemocomponentes.isNotEmpty()) {
+            sb.append("\n================================================================================\n")
+            sb.append("                  REGISTRO DE HEMOCONCENTRADOS / HEMOTERAPIA\n")
+            sb.append("================================================================================\n")
+            for (hc in selectedHemocomponentes) {
+                sb.append("• ${hc.tipo} (${getHemocomponenteFullName(hc.tipo)}):\n")
+                sb.append("  - Data da Hemotransfusão: ${hc.diaHemotransfusao.ifBlank { "Não informada" }}\n")
+                sb.append("  - Nº da Bolsa: ${hc.numeroBolsa.ifBlank { "Não informado" }} | Validade: ${hc.validade.ifBlank { "Não informada" }}\n")
+                sb.append("  - Tipagem Sanguínea: ${hc.tipagemSanguinea.ifBlank { "Não informada" }} | Volume Infundido: ${hc.volumeInfundido.ifBlank { "Não informado" }}\n")
+                sb.append("  - Reação Transfusional: ${hc.reacaoTransfusional}${if (hc.reacaoTransfusional == "Sim" && hc.reacaoQuais.isNotBlank()) " (${hc.reacaoQuais})" else ""}\n")
+                sb.append("  - Sinais Vitais no Início: PA: ${hc.inicioPA.ifBlank { "N/I" }} | FC: ${hc.inicioFC.ifBlank { "N/I" }} | FR: ${hc.inicioFR.ifBlank { "N/I" }} | T: ${hc.inicioT.ifBlank { "N/I" }} | SatO2: ${hc.inicioSatO2.ifBlank { "N/I" }}\n")
+                sb.append("  - Sinais Vitais no Final: PA: ${hc.fimPA.ifBlank { "N/I" }} | FC: ${hc.fimFC.ifBlank { "N/I" }} | FR: ${hc.fimFR.ifBlank { "N/I" }} | T: ${hc.fimT.ifBlank { "N/I" }} | SatO2: ${hc.fimSatO2.ifBlank { "N/I" }}\n")
+                sb.append("\n")
+            }
         }
 
         sb.append("\n--------------------------------------------------------------------------------\n")
@@ -635,7 +661,8 @@ data class SkinLesionRow(
     val fotoUri: String? = null,
     val descricaoAudio: String = "",
     val tipoCobertura: String = "",
-    val dataTroca: String = ""
+    val dataTroca: String = "",
+    val classificacaoJanetJensey: String = ""
 )
 
 data class DrenoItem(
@@ -655,3 +682,38 @@ data class DispositivoItem(
     val dataTroca: String = "",
     val dataRetirada: String = ""
 )
+
+data class HemocomponenteItem(
+    val tipo: String, // "CH", "CP", "PFC", "CRIO", "CG"
+    val selecionado: Boolean = false,
+    val diaHemotransfusao: String = "",
+    val numeroBolsa: String = "",
+    val validade: String = "",
+    val tipagemSanguinea: String = "",
+    val volumeInfundido: String = "",
+    val reacaoTransfusional: String = "Não", // "Sim" or "Não"
+    val reacaoQuais: String = "",
+    // Vital signs at start
+    val inicioPA: String = "",
+    val inicioFC: String = "",
+    val inicioFR: String = "",
+    val inicioT: String = "",
+    val inicioSatO2: String = "",
+    // Vital signs at end
+    val fimPA: String = "",
+    val fimFC: String = "",
+    val fimFR: String = "",
+    val fimT: String = "",
+    val fimSatO2: String = ""
+)
+
+fun getHemocomponenteFullName(tipo: String): String {
+    return when (tipo) {
+        "CH" -> "Concentrado de Hemácias"
+        "CP" -> "Concentrado de Plaquetas"
+        "PFC" -> "Plasma Fresco Congelado"
+        "CRIO" -> "Crioprecipitado"
+        "CG" -> "Concentrado de Granulócitos"
+        else -> tipo
+    }
+}

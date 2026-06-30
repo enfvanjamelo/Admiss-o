@@ -28,6 +28,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -37,6 +38,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -75,28 +79,28 @@ class MainActivity : ComponentActivity() {
         setContent {
             val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle()
             MyApplicationTheme(darkTheme = isDarkTheme) {
-                Surface(
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
                             if (isDarkTheme) {
                                 Brush.verticalGradient(
                                     colors = listOf(
-                                        Color(0xFF2B0925), // Very deep plum/purple background
-                                        Color(0xFF4F1B46), // Deep Plum / Dark Purple
-                                        Color(0xFF381031)  // Mid-tone deep plum
+                                        Color(0xFF051C2C), // Very Deep Midnight Navy (Bar 2)
+                                        Color(0xFF0F323F), // Deep Dark Slate Teal (Bar 1)
+                                        Color(0xFF005C7A)  // Deep Ocean Teal Blue (Bar 3)
                                     )
                                 )
                             } else {
                                 Brush.verticalGradient(
                                     colors = listOf(
-                                        Color(0xFFFBE7C6), // Cream background
-                                        Color(0xFFFFECE6)  // Soft light rose wash
+                                        Color(0xFFFFF6E5), // Softest warm cream top highlight
+                                        Color(0xFFFEEBD0), // Warm transition
+                                        Color(0xFFFEE3B4)  // Main cream background (lightest tone)
                                     )
                                 )
                             }
-                        ),
-                    color = Color.Transparent
+                        )
                 ) {
                     val screenState by viewModel.screenState.collectAsStateWithLifecycle()
                     val admissions by viewModel.admissions.collectAsStateWithLifecycle()
@@ -359,6 +363,54 @@ val glasgowRespostaMotoraOptions = listOf(
     1 to "Ausente (Sem resposta)"
 )
 
+val bwatProfundidadeOptions = listOf(
+    1 to "1 - Espessura parcial (epiderme/derme íntegras ou superficiais)",
+    2 to "2 - Espessura total (envolve derme e tecido subcutâneo)",
+    3 to "3 - Envolve músculo ou fáscia profunda",
+    4 to "4 - Envolve osso, articulação ou tendão",
+    5 to "5 - Necrose/esfacelo espesso que impede ver profundidade"
+)
+
+val bwatBordasOptions = listOf(
+    1 to "1 - Indistintas, difusas ou sem limites claros",
+    2 to "2 - Distintas, bem delineadas, niveladas com a ferida",
+    3 to "3 - Engessadas, enroladas para dentro (epíbole)",
+    4 to "4 - Fibrosas, endurecidas (calosas)",
+    5 to "5 - Necróticas ou descoladas do leito da ferida"
+)
+
+val bwatTecidoNecroticoTipoOptions = listOf(
+    1 to "1 - Nenhum tecido necrótico presente",
+    2 to "2 - Tecido de liquefação branco ou cinza",
+    3 to "3 - Esfacelo (slough) amarelo aderente ou solto",
+    4 to "4 - Escara preta ou marrom firmemente aderente",
+    5 to "5 - Escara espessa, preta e não aderente"
+)
+
+val bwatTecidoNecroticoQtdOptions = listOf(
+    1 to "1 - Nenhum tecido necrótico visível",
+    2 to "2 - < 25% do leito da ferida comprometido",
+    3 to "3 - 25% a 50% do leito da ferida comprometido",
+    4 to "4 - 51% a 75% do leito da ferida comprometido",
+    5 to "5 - > 75% do leito da ferida comprometido"
+)
+
+val bwatExsudatoTipoOptions = listOf(
+    1 to "1 - Nenhum ou exsudato seroso (transparente/claro)",
+    2 to "2 - Sanguinolento (vermelho vivo)",
+    3 to "3 - Serosanguinolento (rosa pálido / aguado)",
+    4 to "4 - Purulento ou turvo (amarelado/esverdeado)",
+    5 to "5 - Purulento fétido (espesso com odor forte)"
+)
+
+val bwatExsudatoQtdOptions = listOf(
+    1 to "1 - Seco (sem exsudato presente)",
+    2 to "2 - Mínimo (leito úmido, sem transferência)",
+    3 to "3 - Moderado (transferência de exsudato para curativo)",
+    4 to "4 - Abundante (curativo saturado rapidamente)",
+    5 to "5 - Maciço / Extremo (exsudato transbordando curativo)"
+)
+
 // List UI Screen
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -393,10 +445,10 @@ fun AdmissionListScreen(
     }
 
     val filteredAdmissionsByTab = remember(filteredAdmissions, selectedTab) {
-        if (selectedTab == 0) {
-            filteredAdmissions.filter { it.recordType != "Evolução" }
-        } else {
-            filteredAdmissions.filter { it.recordType == "Evolução" }
+        when (selectedTab) {
+            0 -> filteredAdmissions.filter { it.recordType != "Evolução" && it.recordType != "Encaminhamento Centro Cirúrgico" }
+            1 -> filteredAdmissions.filter { it.recordType == "Evolução" }
+            else -> filteredAdmissions.filter { it.recordType == "Encaminhamento Centro Cirúrgico" }
         }
     }
 
@@ -509,9 +561,25 @@ fun AdmissionListScreen(
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { onAddClick(if (selectedTab == 0) "Admissão" else "Evolução") },
+                onClick = { 
+                    onAddClick(
+                        when (selectedTab) {
+                            0 -> "Admissão"
+                            1 -> "Evolução"
+                            else -> "Encaminhamento Centro Cirúrgico"
+                        }
+                    ) 
+                },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text(if (selectedTab == 0) "Nova Admissão" else "Nova Evolução") },
+                text = { 
+                    Text(
+                        when (selectedTab) {
+                            0 -> "Nova Admissão"
+                            1 -> "Nova Evolução"
+                            else -> "Novo Encaminhamento"
+                        }
+                    ) 
+                },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.testTag("nova_admissao_fab")
@@ -534,12 +602,17 @@ fun AdmissionListScreen(
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    text = { Text("Admissão de Enfermagem", fontWeight = FontWeight.Bold) }
+                    text = { Text("Admissão", fontWeight = FontWeight.Bold) }
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text("Evolução de Enfermagem", fontWeight = FontWeight.Bold) }
+                    text = { Text("Evolução", fontWeight = FontWeight.Bold) }
+                )
+                Tab(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    text = { Text("Encaminhamento CC", fontWeight = FontWeight.Bold) }
                 )
             }
 
@@ -931,7 +1004,7 @@ fun PatientAdmissionCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val isDark = MaterialTheme.colorScheme.primary == Color(0xFFA80359)
+    val isDark = MaterialTheme.colorScheme.primary == Color(0xFFADC7DB)
     val shape = RoundedCornerShape(20.dp)
     Card(
         modifier = Modifier
@@ -940,9 +1013,9 @@ fun PatientAdmissionCard(
             .testTag("patient_card_${admission.id}"),
         colors = CardDefaults.cardColors(
             containerColor = if (isDark) {
-                Color(0xFF101C2B).copy(alpha = 0.55f) // Deep glass cockpit
+                Color(0xFF0F323F).copy(alpha = 0.55f) // Deep glass cockpit
             } else {
-                Color.White.copy(alpha = 0.85f)      // Luminous white frozen glass
+                Color(0xFFFFF9EE).copy(alpha = 0.85f)      // Luminous warm ivory/cream frozen glass
             }
         ),
         border = BorderStroke(
@@ -975,14 +1048,22 @@ fun PatientAdmissionCard(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Surface(
-                            color = if (admission.recordType == "Evolução") MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
+                            color = when {
+                                admission.recordType == "Evolução" -> MaterialTheme.colorScheme.secondaryContainer
+                                admission.recordType.contains("Encaminhamento") -> MaterialTheme.colorScheme.tertiaryContainer
+                                else -> MaterialTheme.colorScheme.primaryContainer
+                            },
                             shape = RoundedCornerShape(4.dp)
                         ) {
                             Text(
-                                text = admission.recordType,
+                                text = if (admission.recordType.length > 15) "Encaminhamento" else admission.recordType,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = if (admission.recordType == "Evolução") MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer,
+                                color = when {
+                                    admission.recordType == "Evolução" -> MaterialTheme.colorScheme.onSecondaryContainer
+                                    admission.recordType.contains("Encaminhamento") -> MaterialTheme.colorScheme.onTertiaryContainer
+                                    else -> MaterialTheme.colorScheme.onPrimaryContainer
+                                },
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
@@ -1045,7 +1126,9 @@ fun PatientAdmissionCard(
 
             // Horizon list of scale summaries
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1069,6 +1152,13 @@ fun PatientAdmissionCard(
                     else -> Color(0xFF388E3C)
                 }
                 ScoreBadge(label = "Morse", score = admission.morseScore(), color = mColor)
+
+                val bwatColorSum = when (admission.bwatClassification()) {
+                    "Ferida Grave / Degenerativa" -> Color(0xFFD32F2F)
+                    "Regeneração Estagnada" -> Color(0xFFF57C00)
+                    else -> Color(0xFF388E3C)
+                }
+                ScoreBadge(label = "BWAT", score = admission.bwatScore(), color = bwatColorSum)
 
                 val gColor = when (admission.glasgowClassification()) {
                     "Grave" -> Color(0xFFD32F2F)
@@ -1099,7 +1189,7 @@ fun FormSectionCard(
     content: @Composable () -> Unit
 ) {
     val isExpanded = sectionIndex == expandedIndex
-    val isDark = MaterialTheme.colorScheme.primary == Color(0xFFA80359)
+    val isDark = MaterialTheme.colorScheme.primary == Color(0xFFADC7DB)
     val shape = RoundedCornerShape(16.dp)
 
     Card(
@@ -1126,9 +1216,9 @@ fun FormSectionCard(
         ),
         colors = CardDefaults.cardColors(
             containerColor = if (isExpanded) {
-                if (isDark) Color(0xFF141D35).copy(alpha = 0.65f) else Color.White.copy(alpha = 0.85f)
+                if (isDark) Color(0xFF0F323F).copy(alpha = 0.65f) else Color(0xFFFFF9EE).copy(alpha = 0.85f)
             } else {
-                if (isDark) Color(0xFF101625).copy(alpha = 0.45f) else Color.White.copy(alpha = 0.6f)
+                if (isDark) Color(0xFF051C2C).copy(alpha = 0.45f) else Color(0xFFFFF9EE).copy(alpha = 0.6f)
             }
         ),
         shape = shape
@@ -1188,6 +1278,40 @@ fun FormSectionCard(
                 }
             }
         }
+    }
+}
+
+
+fun isPatientFemale(sexo: String): Boolean {
+    val s = sexo.trim().lowercase()
+    return s == "f" || s == "fem" || s == "feminino" || s == "mulher" || s == "fêmina" || s == "femina"
+}
+
+fun adjustGender(term: String, isFemale: Boolean): String {
+    if (!isFemale) return term
+    return when (term) {
+        "Normocárdico" -> "Normocárdica"
+        "Taquicárdico" -> "Taquicárdica"
+        "Bradicárdico" -> "Bradicárdica"
+        "Rítmico" -> "Rítmica"
+        "Arrítmico" -> "Arrítmica"
+        "Normotenso" -> "Normotensa"
+        "Hipertenso" -> "Hipertensa"
+        "Hipotenso" -> "Hipotensa"
+        "Normo-perfudido" -> "Normo-perfudida"
+        "Anúrico" -> "Anúrica"
+        "Oligúrico" -> "Oligúrica"
+        "Eupneico" -> "Eupneica"
+        "Taquipneico" -> "Taquipneica"
+        "Dispneico" -> "Dispneica"
+        "Orientado" -> "Orientada"
+        "Desorientado" -> "Desorientada"
+        "Torporoso" -> "Torporosa"
+        "Agitado" -> "Agitada"
+        "Deprimido" -> "Deprimida"
+        "Sonolento" -> "Sonolenta"
+        "Irresponsivo" -> "Irresponsiva"
+        else -> term
     }
 }
 
@@ -1482,11 +1606,11 @@ fun SimulatedSpeechDialog(
                     Box(
                         modifier = Modifier
                             .size(10.dp)
-                            .background(Color(0xFFFF5252), androidx.compose.foundation.shape.CircleShape)
+                            .background(Color(0xFF4CAF50), androidx.compose.foundation.shape.CircleShape)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Ditado Clínico Assistido",
+                        text = "Ditado Clínico (pt-BR) - Ativo",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -1497,6 +1621,15 @@ fun SimulatedSpeechDialog(
                     text = "Ditando para: $label",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(bottom = 2.dp)
+                )
+
+                Text(
+                    text = "Estado: API de Voz Verificada (pt-BR) ativa e aguardando entrada.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
 
@@ -1669,14 +1802,23 @@ fun FormTextField(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
-                putExtra(RecognizerIntent.EXTRA_PROMPT, "Fale agora em português brasileiro...")
-            }
-            try {
-                voiceLauncher.launch(intent)
-            } catch (e: Exception) {
+            // Permissão concedida no momento do clique. Agora verificamos o estado do serviço de voz pt-BR.
+            val isSpeechAvailable = android.speech.SpeechRecognizer.isRecognitionAvailable(context)
+            if (isSpeechAvailable) {
+                Toast.makeText(context, "Estado da API de Voz: Ativo (pt-BR). Iniciando...", Toast.LENGTH_SHORT).show()
+                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
+                    putExtra(RecognizerIntent.EXTRA_PROMPT, "Fale agora em português brasileiro...")
+                }
+                try {
+                    voiceLauncher.launch(intent)
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Estado: Serviço nativo indisponível. Ativando assistente de voz.", Toast.LENGTH_SHORT).show()
+                    showSimulatedMicDialog = true
+                }
+            } else {
+                Toast.makeText(context, "Estado: Serviço de voz nativo indisponível. Ativando assistente de voz.", Toast.LENGTH_SHORT).show()
                 showSimulatedMicDialog = true
             }
         } else {
@@ -1716,23 +1858,34 @@ fun FormTextField(
             {
                 IconButton(
                     onClick = {
+                        // A permissão só é solicitada neste momento do clique
                         val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
                             context,
                             android.Manifest.permission.RECORD_AUDIO
                         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
                         if (hasPermission) {
-                            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
-                                putExtra(RecognizerIntent.EXTRA_PROMPT, "Fale agora em português brasileiro...")
-                            }
-                            try {
-                                voiceLauncher.launch(intent)
-                            } catch (e: Exception) {
+                            // Verificação de estado para o reconhecimento de voz em português
+                            val isSpeechAvailable = android.speech.SpeechRecognizer.isRecognitionAvailable(context)
+                            if (isSpeechAvailable) {
+                                Toast.makeText(context, "Estado da API de Voz: Ativo (pt-BR). Iniciando...", Toast.LENGTH_SHORT).show()
+                                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
+                                    putExtra(RecognizerIntent.EXTRA_PROMPT, "Fale agora em português brasileiro...")
+                                }
+                                try {
+                                    voiceLauncher.launch(intent)
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Estado: Serviço nativo indisponível. Ativando assistente de voz.", Toast.LENGTH_SHORT).show()
+                                    showSimulatedMicDialog = true
+                                }
+                            } else {
+                                Toast.makeText(context, "Estado: Serviço de voz nativo indisponível. Ativando assistente de voz.", Toast.LENGTH_SHORT).show()
                                 showSimulatedMicDialog = true
                             }
                         } else {
+                            // Solicita a permissão apenas no clique
                             permissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
                         }
                     }
@@ -1755,9 +1908,10 @@ fun ScaleScoreCard(
     score: Int,
     classification: String,
     color: Color,
+    scoreBelowTitle: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val isDark = MaterialTheme.colorScheme.primary == Color(0xFFA80359)
+    val isDark = MaterialTheme.colorScheme.primary == Color(0xFFADC7DB)
     val shape = RoundedCornerShape(16.dp)
     Card(
         modifier = Modifier
@@ -1765,9 +1919,9 @@ fun ScaleScoreCard(
             .padding(vertical = 8.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isDark) {
-                Color(0xFF101C2B).copy(alpha = 0.55f)
+                Color(0xFF0F323F).copy(alpha = 0.55f)
             } else {
-                Color.White.copy(alpha = 0.75f)
+                Color(0xFFFFF9EE).copy(alpha = 0.75f)
             }
         ),
         shape = shape,
@@ -1782,29 +1936,56 @@ fun ScaleScoreCard(
         )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Surface(
-                    color = color.copy(alpha = 0.15f),
-                    border = BorderStroke(1.dp, color.copy(alpha = 0.6f)),
-                    shape = RoundedCornerShape(8.dp)
+            if (scoreBelowTitle) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Surface(
+                        color = color.copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, color.copy(alpha = 0.6f)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = "Escore: $score ($classification)",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = color
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Escore: $score ($classification)",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelMedium,
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = color
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f)
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Surface(
+                        color = color.copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, color.copy(alpha = 0.6f)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = "Escore: $score ($classification)",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = color
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
@@ -1825,7 +2006,7 @@ fun ScaleItemSelector(
     var expanded by remember { mutableStateOf(false) }
     val selectedOption = options.find { it.first == selectedValue } ?: options.first()
 
-    val isDark = MaterialTheme.colorScheme.primary == Color(0xFFA80359)
+    val isDark = MaterialTheme.colorScheme.primary == Color(0xFFADC7DB)
     val cardShape = RoundedCornerShape(14.dp)
     Card(
         modifier = Modifier
@@ -1834,9 +2015,9 @@ fun ScaleItemSelector(
             .clickable { expanded = !expanded },
         colors = CardDefaults.cardColors(
             containerColor = if (isDark) {
-                Color(0xFF101B2B).copy(alpha = 0.5f)
+                Color(0xFF0F323F).copy(alpha = 0.5f)
             } else {
-                Color.White.copy(alpha = 0.8f)
+                Color(0xFFFFF9EE).copy(alpha = 0.8f)
             }
         ),
         border = BorderStroke(
@@ -2018,43 +2199,45 @@ fun AdmissionFormScreen(
                         )
                     }
                 }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        FormTextField(
-                            value = record.religiao,
-                            onValueChange = { new -> onUpdateRecord { it.copy(religiao = new) } },
-                            label = "Religião",
-                            placeholder = "Crença religiosa"
-                        )
+                if (!isEvolucao) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            FormTextField(
+                                value = record.religiao,
+                                onValueChange = { new -> onUpdateRecord { it.copy(religiao = new) } },
+                                label = "Religião",
+                                placeholder = "Crença religiosa"
+                            )
+                        }
+                        Box(modifier = Modifier.weight(1f)) {
+                            FormTextField(
+                                value = record.estadoCivil,
+                                onValueChange = { new -> onUpdateRecord { it.copy(estadoCivil = new) } },
+                                label = "Estado Civil",
+                                placeholder = "Ex. Solteiro"
+                            )
+                        }
                     }
-                    Box(modifier = Modifier.weight(1f)) {
-                        FormTextField(
-                            value = record.estadoCivil,
-                            onValueChange = { new -> onUpdateRecord { it.copy(estadoCivil = new) } },
-                            label = "Estado Civil",
-                            placeholder = "Ex. Solteiro"
-                        )
-                    }
+                    FormTextField(
+                        value = record.funcaoLaboral,
+                        onValueChange = { new -> onUpdateRecord { it.copy(funcaoLaboral = new) } },
+                        label = "Função Laboral",
+                        placeholder = "Profissão / Ocupação"
+                    )
+                    FormTextField(
+                        value = record.proveniencia,
+                        onValueChange = { new -> onUpdateRecord { it.copy(proveniencia = new) } },
+                        label = "Proveniência",
+                        placeholder = "Ex. Pronto Socorro, Ambulatório, Casa"
+                    )
+                    FormTextField(
+                        value = record.prontuario,
+                        onValueChange = { new -> onUpdateRecord { it.copy(prontuario = new) } },
+                        label = "Número do Prontuário",
+                        placeholder = "Registro hospitalar",
+                        keyboardType = KeyboardType.Number
+                    )
                 }
-                FormTextField(
-                    value = record.funcaoLaboral,
-                    onValueChange = { new -> onUpdateRecord { it.copy(funcaoLaboral = new) } },
-                    label = "Função Laboral",
-                    placeholder = "Profissão / Ocupação"
-                )
-                FormTextField(
-                    value = record.proveniencia,
-                    onValueChange = { new -> onUpdateRecord { it.copy(proveniencia = new) } },
-                    label = "Proveniência",
-                    placeholder = "Ex. Pronto Socorro, Ambulatório, Casa"
-                )
-                FormTextField(
-                    value = record.prontuario,
-                    onValueChange = { new -> onUpdateRecord { it.copy(prontuario = new) } },
-                    label = "Número do Prontuário",
-                    placeholder = "Registro hospitalar",
-                    keyboardType = KeyboardType.Number
-                )
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(modifier = Modifier.weight(1f)) {
                         FormTextField(
@@ -2141,51 +2324,55 @@ fun AdmissionFormScreen(
                     }
                 }
 
-                FormTextField(
-                    value = record.saturacaoO2,
-                    onValueChange = { new -> onUpdateRecord { it.copy(saturacaoO2 = new) } },
-                    label = "Saturação de Oxigênio (SatO2)",
-                    placeholder = "Ex. 98%",
-                    showMic = true,
-                    testTag = "saturacao_o2_input"
-                )
-
-                if (!isEvolucao) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                    Text(
-                        text = "Dados Antropométricos",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Box(modifier = Modifier.weight(1f)) {
-                            FormTextField(
-                                value = record.altura,
-                                onValueChange = { new -> onUpdateRecord { it.copy(altura = new) } },
-                                label = "Altura",
-                                placeholder = "Ex. 1.75 ou 175",
-                                showMic = true,
-                                testTag = "altura_input"
-                            )
-                        }
-                        Box(modifier = Modifier.weight(1f)) {
-                            FormTextField(
-                                value = record.peso,
-                                onValueChange = { new -> onUpdateRecord { it.copy(peso = new) } },
-                                label = "Peso (kg)",
-                                placeholder = "Ex. 70.5",
-                                showMic = true,
-                                testTag = "peso_input"
-                            )
-                        }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        FormTextField(
+                            value = record.saturacaoO2,
+                            onValueChange = { new -> onUpdateRecord { it.copy(saturacaoO2 = new) } },
+                            label = "Saturação de Oxigênio (SatO2)",
+                            placeholder = "Ex. 98%",
+                            showMic = true,
+                            testTag = "saturacao_o2_input"
+                        )
                     }
+                    Box(modifier = Modifier.weight(1f)) {
+                        FormTextField(
+                            value = record.glicemia,
+                            onValueChange = { new -> onUpdateRecord { it.copy(glicemia = new) } },
+                            label = "Glicemia Capilar",
+                            placeholder = "Ex. 110 mg/dL",
+                            showMic = true,
+                            testTag = "glicemia_input"
+                        )
+                    }
+                }
 
-                    val imc = record.imcValue()
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        FormTextField(
+                            value = record.altura,
+                            onValueChange = { new -> onUpdateRecord { it.copy(altura = new) } },
+                            label = "Altura (m)",
+                            placeholder = "Ex. 1.75",
+                            showMic = true,
+                            testTag = "altura_input"
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f)) {
+                        FormTextField(
+                            value = record.peso,
+                            onValueChange = { new -> onUpdateRecord { it.copy(peso = new) } },
+                            label = "Peso (kg)",
+                            placeholder = "Ex. 70.5",
+                            showMic = true,
+                            testTag = "peso_input"
+                        )
+                    }
+                }
+
+                val imc = record.imcValue()
                     if (imc != null) {
                         val classification = record.imcClassification()
                         val imcColor = when {
@@ -2240,7 +2427,6 @@ fun AdmissionFormScreen(
                         }
                     }
                 }
-            }
 
             // Card 2: Sistemas Orgânicos & Dispositivos
             FormSectionCard(
@@ -2281,13 +2467,35 @@ fun AdmissionFormScreen(
                     showMic = true
                 )
 
+                val isFemaleCardio = isPatientFemale(record.sexo)
+                val cardioOptionsRaw = listOf(
+                    "Alterações nas bulhas cardíacas",
+                    "Uso de marcapasso ou presença de cabos de marcapasso",
+                    "Paciente com válvula cardíaca",
+                    "Normocárdico",
+                    "Taquicárdico",
+                    "Bradicárdico",
+                    "Rítmico",
+                    "Arrítmico",
+                    "Normotenso",
+                    "Hipertenso",
+                    "Hipotenso",
+                    "Perfusão: Normo-perfudido",
+                    "Pulso cheio",
+                    "Pulso filiforme",
+                    "Cianose de extremidades",
+                    "Palidez mucocutânea",
+                    "Edema +1",
+                    "Edema +2",
+                    "Edema +3",
+                    "Edema +4",
+                    "Estase jugular"
+                )
+                val cardioOptions = cardioOptionsRaw.map { adjustGender(it, isFemaleCardio) }
+
                 SystemOptionsGrid(
                     title = "Sistema Cardiovascular",
-                    options = listOf(
-                        "Alterações nas bulhas cardíacas",
-                        "Uso de marcapasso ou presença de cabos de marcapasso",
-                        "Paciente com válvula cardíaca"
-                    ),
+                    options = cardioOptions,
                     currentValue = record.sistemaCardiovascular,
                     onValueChange = { newVal -> onUpdateRecord { it.copy(sistemaCardiovascular = newVal) } },
                     testTagPrefix = "cardio"
@@ -2303,17 +2511,20 @@ fun AdmissionFormScreen(
                     showMic = true
                 )
 
+                val respOptionsRaw = listOf(
+                    "Eupneico",
+                    "Taquipneico",
+                    "Dispneico",
+                    "Uso de cateter nasal",
+                    "Máscara de Venturi",
+                    "Traqueostomia",
+                    "Tubo endotraqueal"
+                )
+                val respOptions = respOptionsRaw.map { adjustGender(it, isFemaleCardio) }
+
                 SystemOptionsGrid(
                     title = "Sistema Respiratório",
-                    options = listOf(
-                        "Eupneico",
-                        "Taquipneico",
-                        "Dispneico",
-                        "Uso de cateter nasal",
-                        "Máscara de Venturi",
-                        "Traqueostomia",
-                        "Tubo endotraqueal"
-                    ),
+                    options = respOptions,
                     currentValue = record.sistemaRespiratorio,
                     onValueChange = { newVal -> onUpdateRecord { it.copy(sistemaRespiratorio = newVal) } },
                     testTagPrefix = "resp"
@@ -2329,19 +2540,25 @@ fun AdmissionFormScreen(
                     showMic = true
                 )
 
+                val neuroOptionsRaw = listOf(
+                    "Alerta",
+                    "Consciente",
+                    "Orientado",
+                    "Desorientado",
+                    "Torporoso",
+                    "Agitado",
+                    "Deprimido",
+                    "Sonolento",
+                    "Irresponsivo",
+                    "Flutuação de consciência",
+                    "Perda de consciência",
+                    "Crises convulsivas"
+                )
+                val neuroOptions = neuroOptionsRaw.map { adjustGender(it, isFemaleCardio) }
+
                 SystemOptionsGrid(
                     title = "Sistema Neurológico",
-                    options = listOf(
-                        "Alerta",
-                        "Consciente",
-                        "Orientado",
-                        "Desorientado",
-                        "Torporoso",
-                        "Agitado",
-                        "Deprimido",
-                        "Sonolento",
-                        "In-responsivo"
-                    ),
+                    options = neuroOptions,
                     currentValue = record.sistemaNeurologico,
                     onValueChange = { newVal -> onUpdateRecord { it.copy(sistemaNeurologico = newVal) } },
                     testTagPrefix = "neuro"
@@ -2523,14 +2740,23 @@ fun AdmissionFormScreen(
                     modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
                 )
 
-                val urinaryOptions = listOf(
+                val isFemaleUrinary = isPatientFemale(record.sexo)
+                val urinaryOptionsRaw = listOf(
                     "Diurese espontânea",
                     "Sonda vesical de demora",
                     "Cistostomia",
                     "Urostomia",
                     "Nefrostomia",
-                    "Cateterismo vesical intermitente"
+                    "Cateterismo vesical intermitente",
+                    "Anúrico",
+                    "Oligúrico",
+                    "Débito urinário normal",
+                    "Polaciúria",
+                    "Hematúria",
+                    "Presença de grumos",
+                    "Presença de coágulos"
                 )
+                val urinaryOptions = urinaryOptionsRaw.map { adjustGender(it, isFemaleUrinary) }
 
                 val selectedUrinary = urinaryOptions.filter { option ->
                     record.sistemaUrinario.split(",").any { it.trim().startsWith(option, ignoreCase = true) }
@@ -2916,16 +3142,16 @@ fun AdmissionFormScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Planimetria & Foto Canvas
-                val isDarkPlani = MaterialTheme.colorScheme.primary == Color(0xFFA80359)
+                val isDarkPlani = MaterialTheme.colorScheme.primary == Color(0xFFADC7DB)
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = if (isDarkPlani) {
-                            Color(0xFF101B2B).copy(alpha = 0.5f)
+                            Color(0xFF0F323F).copy(alpha = 0.5f)
                         } else {
-                            Color.White.copy(alpha = 0.8f)
+                            Color(0xFFFFF9EE).copy(alpha = 0.8f)
                         }
                     ),
                     border = BorderStroke(
@@ -3070,18 +3296,19 @@ fun AdmissionFormScreen(
                             }
                         }
 
-                        Text(
-                            text = "Foto da Lesão",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(bottom = 6.dp)
-                        )
+                        if (!record.recordType.contains("Encaminhamento")) {
+                            Text(
+                                text = "Foto da Lesão",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(bottom = 6.dp)
+                            )
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                             Button(
                                 onClick = { photoLauncher.launch("image/*") },
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
@@ -3201,6 +3428,7 @@ fun AdmissionFormScreen(
                                     )
                                 }
                             }
+                        }
                         }
                     }
                 }
@@ -3662,6 +3890,394 @@ fun AdmissionFormScreen(
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                Text(
+                    text = "Hemotransfusão / Hemoconcentrados",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+
+                val hemocomponentesList = record.getHemocomponentesList()
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                        .padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    hemocomponentesList.forEachIndexed { index, hc ->
+                        val fullName = when(hc.tipo) {
+                            "CH" -> "Concentrado de Hemácias (CH)"
+                            "CP" -> "Concentrado de Plaquetas (CP)"
+                            "PFC" -> "Plasma Fresco Congelado (PFC)"
+                            "CRIO" -> "Crioprecipitado (CRIO)"
+                            "CG" -> "Concentrado de Granulócitos (CG)"
+                            else -> hc.tipo
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    if (hc.selecionado) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f) else androidx.compose.ui.graphics.Color.Transparent,
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .padding(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = hc.selecionado,
+                                    onCheckedChange = { isChecked ->
+                                        val newList = hemocomponentesList.toMutableList()
+                                        newList[index] = hc.copy(selecionado = isChecked)
+                                        onUpdateRecord { it.withUpdatedHemocomponentes(newList) }
+                                    },
+                                    modifier = Modifier.testTag("hemocomponente_checkbox_$index")
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = fullName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (hc.selecionado) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            if (hc.selecionado) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            OutlinedTextField(
+                                                value = hc.diaHemotransfusao,
+                                                onValueChange = { valNew ->
+                                                    val newList = hemocomponentesList.toMutableList()
+                                                    newList[index] = hc.copy(diaHemotransfusao = valNew)
+                                                    onUpdateRecord { it.withUpdatedHemocomponentes(newList) }
+                                                },
+                                                label = { Text("Data da Transfusão", style = MaterialTheme.typography.bodySmall) },
+                                                placeholder = { Text("Ex: 27/06/2026", style = MaterialTheme.typography.bodySmall) },
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.fillMaxWidth().testTag("hemocomponente_data_$index")
+                                            )
+                                        }
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            OutlinedTextField(
+                                                value = hc.numeroBolsa,
+                                                onValueChange = { valNew ->
+                                                    val newList = hemocomponentesList.toMutableList()
+                                                    newList[index] = hc.copy(numeroBolsa = valNew)
+                                                    onUpdateRecord { it.withUpdatedHemocomponentes(newList) }
+                                                },
+                                                label = { Text("Nº da Bolsa", style = MaterialTheme.typography.bodySmall) },
+                                                placeholder = { Text("Ex: 123456", style = MaterialTheme.typography.bodySmall) },
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.fillMaxWidth().testTag("hemocomponente_bolsa_$index")
+                                            )
+                                        }
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            OutlinedTextField(
+                                                value = hc.validade,
+                                                onValueChange = { valNew ->
+                                                    val newList = hemocomponentesList.toMutableList()
+                                                    newList[index] = hc.copy(validade = valNew)
+                                                    onUpdateRecord { it.withUpdatedHemocomponentes(newList) }
+                                                },
+                                                label = { Text("Validade", style = MaterialTheme.typography.bodySmall) },
+                                                placeholder = { Text("Ex: 31/07/2026", style = MaterialTheme.typography.bodySmall) },
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.fillMaxWidth().testTag("hemocomponente_validade_$index")
+                                            )
+                                        }
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            OutlinedTextField(
+                                                value = hc.tipagemSanguinea,
+                                                onValueChange = { valNew ->
+                                                    val newList = hemocomponentesList.toMutableList()
+                                                    newList[index] = hc.copy(tipagemSanguinea = valNew)
+                                                    onUpdateRecord { it.withUpdatedHemocomponentes(newList) }
+                                                },
+                                                label = { Text("Tipagem Sanguínea", style = MaterialTheme.typography.bodySmall) },
+                                                placeholder = { Text("Ex: O+", style = MaterialTheme.typography.bodySmall) },
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.fillMaxWidth().testTag("hemocomponente_tipagem_$index")
+                                            )
+                                        }
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            OutlinedTextField(
+                                                value = hc.volumeInfundido,
+                                                onValueChange = { valNew ->
+                                                    val newList = hemocomponentesList.toMutableList()
+                                                    newList[index] = hc.copy(volumeInfundido = valNew)
+                                                    onUpdateRecord { it.withUpdatedHemocomponentes(newList) }
+                                                },
+                                                label = { Text("Volume Infundido", style = MaterialTheme.typography.bodySmall) },
+                                                placeholder = { Text("Ex: 300 ml", style = MaterialTheme.typography.bodySmall) },
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.fillMaxWidth().testTag("hemocomponente_volume_$index")
+                                            )
+                                        }
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            Column {
+                                                Text("Reação Transfusional?", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Row(
+                                                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    RadioButton(
+                                                        selected = hc.reacaoTransfusional == "Não",
+                                                        onClick = {
+                                                            val newList = hemocomponentesList.toMutableList()
+                                                            newList[index] = hc.copy(reacaoTransfusional = "Não", reacaoQuais = "")
+                                                            onUpdateRecord { it.withUpdatedHemocomponentes(newList) }
+                                                        }
+                                                    )
+                                                    Text("Não", style = MaterialTheme.typography.bodySmall)
+                                                    RadioButton(
+                                                        selected = hc.reacaoTransfusional == "Sim",
+                                                        onClick = {
+                                                            val newList = hemocomponentesList.toMutableList()
+                                                            newList[index] = hc.copy(reacaoTransfusional = "Sim")
+                                                            onUpdateRecord { it.withUpdatedHemocomponentes(newList) }
+                                                        }
+                                                    )
+                                                    Text("Sim", style = MaterialTheme.typography.bodySmall)
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if (hc.reacaoTransfusional == "Sim") {
+                                        OutlinedTextField(
+                                            value = hc.reacaoQuais,
+                                            onValueChange = { valNew ->
+                                                val newList = hemocomponentesList.toMutableList()
+                                                newList[index] = hc.copy(reacaoQuais = valNew)
+                                                onUpdateRecord { it.withUpdatedHemocomponentes(newList) }
+                                            },
+                                            label = { Text("Quais reações?", style = MaterialTheme.typography.bodySmall) },
+                                            placeholder = { Text("Ex: Febre, calafrios, prurido, etc.", style = MaterialTheme.typography.bodySmall) },
+                                            singleLine = false,
+                                            maxLines = 2,
+                                            textStyle = MaterialTheme.typography.bodySmall,
+                                            modifier = Modifier.fillMaxWidth().testTag("hemocomponente_reacao_quais_$index")
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Sinais Vitais no INÍCIO da Transfusão:",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            OutlinedTextField(
+                                                value = hc.inicioPA,
+                                                onValueChange = { valNew ->
+                                                    val newList = hemocomponentesList.toMutableList()
+                                                    newList[index] = hc.copy(inicioPA = valNew)
+                                                    onUpdateRecord { it.withUpdatedHemocomponentes(newList) }
+                                                },
+                                                label = { Text("PA", style = MaterialTheme.typography.bodySmall) },
+                                                placeholder = { Text("12x8", style = MaterialTheme.typography.bodySmall) },
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            OutlinedTextField(
+                                                value = hc.inicioFC,
+                                                onValueChange = { valNew ->
+                                                    val newList = hemocomponentesList.toMutableList()
+                                                    newList[index] = hc.copy(inicioFC = valNew)
+                                                    onUpdateRecord { it.withUpdatedHemocomponentes(newList) }
+                                                },
+                                                label = { Text("FC", style = MaterialTheme.typography.bodySmall) },
+                                                placeholder = { Text("80", style = MaterialTheme.typography.bodySmall) },
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            OutlinedTextField(
+                                                value = hc.inicioFR,
+                                                onValueChange = { valNew ->
+                                                    val newList = hemocomponentesList.toMutableList()
+                                                    newList[index] = hc.copy(inicioFR = valNew)
+                                                    onUpdateRecord { it.withUpdatedHemocomponentes(newList) }
+                                                },
+                                                label = { Text("FR", style = MaterialTheme.typography.bodySmall) },
+                                                placeholder = { Text("16", style = MaterialTheme.typography.bodySmall) },
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            OutlinedTextField(
+                                                value = hc.inicioT,
+                                                onValueChange = { valNew ->
+                                                    val newList = hemocomponentesList.toMutableList()
+                                                    newList[index] = hc.copy(inicioT = valNew)
+                                                    onUpdateRecord { it.withUpdatedHemocomponentes(newList) }
+                                                },
+                                                label = { Text("T", style = MaterialTheme.typography.bodySmall) },
+                                                placeholder = { Text("36.5", style = MaterialTheme.typography.bodySmall) },
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            OutlinedTextField(
+                                                value = hc.inicioSatO2,
+                                                onValueChange = { valNew ->
+                                                    val newList = hemocomponentesList.toMutableList()
+                                                    newList[index] = hc.copy(inicioSatO2 = valNew)
+                                                    onUpdateRecord { it.withUpdatedHemocomponentes(newList) }
+                                                },
+                                                label = { Text("SatO2", style = MaterialTheme.typography.bodySmall) },
+                                                placeholder = { Text("98%", style = MaterialTheme.typography.bodySmall) },
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Sinais Vitais no FINAL da Transfusão:",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            OutlinedTextField(
+                                                value = hc.fimPA,
+                                                onValueChange = { valNew ->
+                                                    val newList = hemocomponentesList.toMutableList()
+                                                    newList[index] = hc.copy(fimPA = valNew)
+                                                    onUpdateRecord { it.withUpdatedHemocomponentes(newList) }
+                                                },
+                                                label = { Text("PA", style = MaterialTheme.typography.bodySmall) },
+                                                placeholder = { Text("120/80", style = MaterialTheme.typography.bodySmall) },
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            OutlinedTextField(
+                                                value = hc.fimFC,
+                                                onValueChange = { valNew ->
+                                                    val newList = hemocomponentesList.toMutableList()
+                                                    newList[index] = hc.copy(fimFC = valNew)
+                                                    onUpdateRecord { it.withUpdatedHemocomponentes(newList) }
+                                                },
+                                                label = { Text("FC", style = MaterialTheme.typography.bodySmall) },
+                                                placeholder = { Text("80", style = MaterialTheme.typography.bodySmall) },
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            OutlinedTextField(
+                                                value = hc.fimFR,
+                                                onValueChange = { valNew ->
+                                                    val newList = hemocomponentesList.toMutableList()
+                                                    newList[index] = hc.copy(fimFR = valNew)
+                                                    onUpdateRecord { it.withUpdatedHemocomponentes(newList) }
+                                                },
+                                                label = { Text("FR", style = MaterialTheme.typography.bodySmall) },
+                                                placeholder = { Text("16", style = MaterialTheme.typography.bodySmall) },
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            OutlinedTextField(
+                                                value = hc.fimT,
+                                                onValueChange = { valNew ->
+                                                    val newList = hemocomponentesList.toMutableList()
+                                                    newList[index] = hc.copy(fimT = valNew)
+                                                    onUpdateRecord { it.withUpdatedHemocomponentes(newList) }
+                                                },
+                                                label = { Text("T", style = MaterialTheme.typography.bodySmall) },
+                                                placeholder = { Text("36.5", style = MaterialTheme.typography.bodySmall) },
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            OutlinedTextField(
+                                                value = hc.fimSatO2,
+                                                onValueChange = { valNew ->
+                                                    val newList = hemocomponentesList.toMutableList()
+                                                    newList[index] = hc.copy(fimSatO2 = valNew)
+                                                    onUpdateRecord { it.withUpdatedHemocomponentes(newList) }
+                                                },
+                                                label = { Text("SatO2", style = MaterialTheme.typography.bodySmall) },
+                                                placeholder = { Text("98%", style = MaterialTheme.typography.bodySmall) },
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // Card 3: Histórico Clínico & Alergias
@@ -3760,57 +4376,48 @@ fun AdmissionFormScreen(
                     classification = record.bradenClassification(),
                     color = bradenClassificationColor
                 ) {
-                    if (!isEvolucao) {
-                        Text(
-                            text = "Avalia risco para Lesão por Pressão (LPP). Um score menor indica maior risco de desenvolvimento.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        ScaleItemSelector(
-                            label = "Percepção Sensorial",
-                            selectedValue = record.bradenPercepcaoSensorial,
-                            options = bradenPercepcaoSensorialOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(bradenPercepcaoSensorial = new) } }
-                        )
-                        ScaleItemSelector(
-                            label = "Umidade",
-                            selectedValue = record.bradenUmidade,
-                            options = bradenUmidadeOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(bradenUmidade = new) } }
-                        )
-                        ScaleItemSelector(
-                            label = "Atividade",
-                            selectedValue = record.bradenAtividade,
-                            options = bradenAtividadeOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(bradenAtividade = new) } }
-                        )
-                        ScaleItemSelector(
-                            label = "Mobilidade",
-                            selectedValue = record.bradenMobilidade,
-                            options = bradenMobilidadeOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(bradenMobilidade = new) } }
-                        )
-                        ScaleItemSelector(
-                            label = "Nutrição",
-                            selectedValue = record.bradenNutricao,
-                            options = bradenNutricaoOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(bradenNutricao = new) } }
-                        )
-                        ScaleItemSelector(
-                            label = "Fricção e Cisalhamento",
-                            selectedValue = record.bradenFriccaoCisalhamento,
-                            options = bradenFriccaoCisalhamentoOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(bradenFriccaoCisalhamento = new) } }
-                        )
-                    } else {
-                        Text(
-                            text = "Valores de perguntas ocultados na Evolução. Score e Classificação exibidos acima.",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontStyle = FontStyle.Italic,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                    }
+                    Text(
+                        text = "Avalia risco para Lesão por Pressão (LPP). Um score menor indica maior risco de desenvolvimento.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ScaleItemSelector(
+                        label = "Percepção Sensorial",
+                        selectedValue = record.bradenPercepcaoSensorial,
+                        options = bradenPercepcaoSensorialOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(bradenPercepcaoSensorial = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Umidade",
+                        selectedValue = record.bradenUmidade,
+                        options = bradenUmidadeOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(bradenUmidade = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Atividade",
+                        selectedValue = record.bradenAtividade,
+                        options = bradenAtividadeOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(bradenAtividade = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Mobilidade",
+                        selectedValue = record.bradenMobilidade,
+                        options = bradenMobilidadeOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(bradenMobilidade = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Nutrição",
+                        selectedValue = record.bradenNutricao,
+                        options = bradenNutricaoOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(bradenNutricao = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Fricção e Cisalhamento",
+                        selectedValue = record.bradenFriccaoCisalhamento,
+                        options = bradenFriccaoCisalhamentoOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(bradenFriccaoCisalhamento = new) } }
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -3829,75 +4436,66 @@ fun AdmissionFormScreen(
                     classification = record.fugulinClassification(),
                     color = fugulinClassificationColor
                 ) {
-                    if (!isEvolucao) {
-                        Text(
-                            text = "Classificação de dependência do paciente. Quanto maior o escore, maior o nível de dependência da enfermagem.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        ScaleItemSelector(
-                            label = "Estado Mental",
-                            selectedValue = record.fugulinEstadoMental,
-                            options = fugulinEstadoMentalOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(fugulinEstadoMental = new) } }
-                        )
-                        ScaleItemSelector(
-                            label = "Oxigenação",
-                            selectedValue = record.fugulinOxigenacao,
-                            options = fugulinOxigenacaoOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(fugulinOxigenacao = new) } }
-                        )
-                        ScaleItemSelector(
-                            label = "Sinais Vitais",
-                            selectedValue = record.fugulinSinaisVitais,
-                            options = fugulinSinaisVitaisOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(fugulinSinaisVitais = new) } }
-                        )
-                        ScaleItemSelector(
-                            label = "Motilidade",
-                            selectedValue = record.fugulinMotilidade,
-                            options = fugulinMotilidadeOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(fugulinMotilidade = new) } }
-                        )
-                        ScaleItemSelector(
-                            label = "Locomoção",
-                            selectedValue = record.fugulinLocomocao,
-                            options = fugulinLocomocaoOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(fugulinLocomocao = new) } }
-                        )
-                        ScaleItemSelector(
-                            label = "Cuidado Corporal",
-                            selectedValue = record.fugulinCuidadoCorporal,
-                            options = fugulinCuidadoCorporalOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(fugulinCuidadoCorporal = new) } }
-                        )
-                        ScaleItemSelector(
-                            label = "Eliminação",
-                            selectedValue = record.fugulinEliminacao,
-                            options = fugulinEliminacaoOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(fugulinEliminacao = new) } }
-                        )
-                        ScaleItemSelector(
-                            label = "Nutrição e Hidratação",
-                            selectedValue = record.fugulinNutricaoHidratacao,
-                            options = fugulinNutricaoHidratacaoOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(fugulinNutricaoHidratacao = new) } }
-                        )
-                        ScaleItemSelector(
-                            label = "Terapêutica",
-                            selectedValue = record.fugulinTerapeutica,
-                            options = fugulinTerapeuticaOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(fugulinTerapeutica = new) } }
-                        )
-                    } else {
-                        Text(
-                            text = "Valores de perguntas ocultados na Evolução. Score e Classificação exibidos acima.",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontStyle = FontStyle.Italic,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                    }
+                    Text(
+                        text = "Classificação de dependência do paciente. Quanto maior o escore, maior o nível de dependência da enfermagem.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ScaleItemSelector(
+                        label = "Estado Mental",
+                        selectedValue = record.fugulinEstadoMental,
+                        options = fugulinEstadoMentalOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(fugulinEstadoMental = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Oxigenação",
+                        selectedValue = record.fugulinOxigenacao,
+                        options = fugulinOxigenacaoOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(fugulinOxigenacao = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Sinais Vitais",
+                        selectedValue = record.fugulinSinaisVitais,
+                        options = fugulinSinaisVitaisOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(fugulinSinaisVitais = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Motilidade",
+                        selectedValue = record.fugulinMotilidade,
+                        options = fugulinMotilidadeOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(fugulinMotilidade = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Locomoção",
+                        selectedValue = record.fugulinLocomocao,
+                        options = fugulinLocomocaoOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(fugulinLocomocao = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Cuidado Corporal",
+                        selectedValue = record.fugulinCuidadoCorporal,
+                        options = fugulinCuidadoCorporalOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(fugulinCuidadoCorporal = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Eliminação",
+                        selectedValue = record.fugulinEliminacao,
+                        options = fugulinEliminacaoOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(fugulinEliminacao = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Nutrição e Hidratação",
+                        selectedValue = record.fugulinNutricaoHidratacao,
+                        options = fugulinNutricaoHidratacaoOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(fugulinNutricaoHidratacao = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Terapêutica",
+                        selectedValue = record.fugulinTerapeutica,
+                        options = fugulinTerapeuticaOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(fugulinTerapeutica = new) } }
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -3914,57 +4512,107 @@ fun AdmissionFormScreen(
                     classification = record.morseClassification(),
                     color = morseClassificationColor
                 ) {
-                    if (!isEvolucao) {
-                        Text(
-                            text = "Avalia o risco de quedas. Um escore de 45 ou superior indica alto risco físico.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        ScaleItemSelector(
-                            label = "Histórico de Quedas nos Últimos 3 Meses",
-                            selectedValue = record.morseHistoricoQuedas,
-                            options = morseHistoricoQuedasOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(morseHistoricoQuedas = new) } }
-                        )
-                        ScaleItemSelector(
-                            label = "Diagnóstico Secundário",
-                            selectedValue = record.morseDiagnosticoSecundario,
-                            options = morseDiagnosticoSecundarioOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(morseDiagnosticoSecundario = new) } }
-                        )
-                        ScaleItemSelector(
-                            label = "Auxílio na Locomoção (Deambulação)",
-                            selectedValue = record.morseAuxilioLocomocao,
-                            options = morseAuxilioLocomocaoOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(morseAuxilioLocomocao = new) } }
-                        )
-                        ScaleItemSelector(
-                            label = "Terapia Endovenosa / Dispositivo Venoso",
-                            selectedValue = record.morseTerapiaEV,
-                            options = morseTerapiaEVOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(morseTerapiaEV = new) } }
-                        )
-                        ScaleItemSelector(
-                            label = "Padrão de Marcha / Movimentação",
-                            selectedValue = record.morseMarcha,
-                            options = morseMarchaOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(morseMarcha = new) } }
-                        )
-                        ScaleItemSelector(
-                            label = "Estado Mental",
-                            selectedValue = record.morseEstadoMental,
-                            options = morseEstadoMentalOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(morseEstadoMental = new) } }
-                        )
-                    } else {
-                        Text(
-                            text = "Valores de perguntas ocultados na Evolução. Score e Classificação exibidos acima.",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontStyle = FontStyle.Italic,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                    }
+                    Text(
+                        text = "Avalia o risco de quedas. Um escore de 45 ou superior indica alto risco físico.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ScaleItemSelector(
+                        label = "Histórico de Quedas nos Últimos 3 Meses",
+                        selectedValue = record.morseHistoricoQuedas,
+                        options = morseHistoricoQuedasOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(morseHistoricoQuedas = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Diagnóstico Secundário",
+                        selectedValue = record.morseDiagnosticoSecundario,
+                        options = morseDiagnosticoSecundarioOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(morseDiagnosticoSecundario = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Auxílio na Locomoção (Deambulação)",
+                        selectedValue = record.morseAuxilioLocomocao,
+                        options = morseAuxilioLocomocaoOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(morseAuxilioLocomocao = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Terapia Endovenosa / Dispositivo Venoso",
+                        selectedValue = record.morseTerapiaEV,
+                        options = morseTerapiaEVOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(morseTerapiaEV = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Padrão de Marcha / Movimentação",
+                        selectedValue = record.morseMarcha,
+                        options = morseMarchaOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(morseMarcha = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Estado Mental",
+                        selectedValue = record.morseEstadoMental,
+                        options = morseEstadoMentalOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(morseEstadoMental = new) } }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Bates-Jensen Scale (BWAT)
+                val bwatClassificationColor = when (record.bwatClassification()) {
+                    "Ferida Grave / Degenerativa" -> Color(0xFFD32F2F)
+                    "Regeneração Estagnada" -> Color(0xFFF57C00)
+                    else -> Color(0xFF388E3C)
+                }
+                ScaleScoreCard(
+                    title = "D) Escala de Bates-Jensen (BWAT)",
+                    score = record.bwatScore(),
+                    classification = record.bwatClassification(),
+                    color = bwatClassificationColor,
+                    scoreBelowTitle = true
+                ) {
+                    Text(
+                        text = "Avaliação detalhada de feridas e cicatrização. Pontuação de 6 a 30 (menores pontuações indicam regeneração saudável).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ScaleItemSelector(
+                        label = "Profundidade da Ferida",
+                        selectedValue = record.bwatProfundidade,
+                        options = bwatProfundidadeOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(bwatProfundidade = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Bordas da Ferida",
+                        selectedValue = record.bwatBordas,
+                        options = bwatBordasOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(bwatBordas = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Tipo de Tecido Necrótico",
+                        selectedValue = record.bwatTecidoNecroticoTipo,
+                        options = bwatTecidoNecroticoTipoOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(bwatTecidoNecroticoTipo = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Quantidade de Tecido Necrótico",
+                        selectedValue = record.bwatTecidoNecroticoQtd,
+                        options = bwatTecidoNecroticoQtdOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(bwatTecidoNecroticoQtd = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Tipo de Exsudato",
+                        selectedValue = record.bwatExsudatoTipo,
+                        options = bwatExsudatoTipoOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(bwatExsudatoTipo = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Quantidade de Exsudato",
+                        selectedValue = record.bwatExsudatoQtd,
+                        options = bwatExsudatoQtdOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(bwatExsudatoQtd = new) } }
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -3976,44 +4624,35 @@ fun AdmissionFormScreen(
                     else -> Color(0xFF388E3C)
                 }
                 ScaleScoreCard(
-                    title = "D) Escala de Glasgow",
+                    title = "E) Escala de Glasgow",
                     score = record.glasgowScore(),
                     classification = record.glasgowClassification(),
                     color = glasgowClassificationColor
                 ) {
-                    if (!isEvolucao) {
-                        Text(
-                            text = "Avalia neurologicamente o nível de consciência (GCS). De 3 a 15 pontos.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        ScaleItemSelector(
-                            label = "Abertura Ocular",
-                            selectedValue = record.glasgowAberturaOcular,
-                            options = glasgowAberturaOcularOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(glasgowAberturaOcular = new) } }
-                        )
-                        ScaleItemSelector(
-                            label = "Resposta Verbal",
-                            selectedValue = record.glasgowRespostaVerbal,
-                            options = glasgowRespostaVerbalOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(glasgowRespostaVerbal = new) } }
-                        )
-                        ScaleItemSelector(
-                            label = "Resposta Motora",
-                            selectedValue = record.glasgowRespostaMotora,
-                            options = glasgowRespostaMotoraOptions,
-                            onValueSelected = { new -> onUpdateRecord { it.copy(glasgowRespostaMotora = new) } }
-                        )
-                    } else {
-                        Text(
-                            text = "Valores de perguntas ocultados na Evolução. Score e Classificação exibidos acima.",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontStyle = FontStyle.Italic,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                    }
+                    Text(
+                        text = "Avalia neurologicamente o nível de consciência (GCS). De 3 a 15 pontos.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ScaleItemSelector(
+                        label = "Abertura Ocular",
+                        selectedValue = record.glasgowAberturaOcular,
+                        options = glasgowAberturaOcularOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(glasgowAberturaOcular = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Resposta Verbal",
+                        selectedValue = record.glasgowRespostaVerbal,
+                        options = glasgowRespostaVerbalOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(glasgowRespostaVerbal = new) } }
+                    )
+                    ScaleItemSelector(
+                        label = "Resposta Motora",
+                        selectedValue = record.glasgowRespostaMotora,
+                        options = glasgowRespostaMotoraOptions,
+                        onValueSelected = { new -> onUpdateRecord { it.copy(glasgowRespostaMotora = new) } }
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -4026,7 +4665,7 @@ fun AdmissionFormScreen(
                     else -> Color(0xFF388E3C)
                 }
                 ScaleScoreCard(
-                    title = "E) Escala de Dor",
+                    title = "F) Escala de Dor",
                     score = record.dorNivel,
                     classification = record.dorClassification(),
                     color = painClassificationColor
@@ -4106,6 +4745,14 @@ fun AdmissionFormScreen(
                                 onValueChange = { editingLesionState.value = editingLesion.copy(tipoLesao = it) },
                                 label = "Tipo de Lesão",
                                 placeholder = "Ex. LPP Estágio 2, Lesão por fricção",
+                                showMic = true
+                            )
+                            
+                            FormTextField(
+                                value = editingLesion.classificacaoJanetJensey,
+                                onValueChange = { editingLesionState.value = editingLesion.copy(classificacaoJanetJensey = it) },
+                                label = "Classificação Janet-Jensey / Bates-Jensen",
+                                placeholder = "Ex. Regeneração Ativa, Escore 24, Grau II",
                                 showMic = true
                             )
                             
@@ -4217,15 +4864,17 @@ fun AdmissionFormScreen(
                                 showMic = true
                             )
                             
-                            Spacer(modifier = Modifier.height(8.dp))
-                            
-                            Text(
-                                text = "Registro Fotográfico da Lesão",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(bottom = 4.dp)
-                            )
+                            if (!record.recordType.contains("Encaminhamento")) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                
+                                Text(
+                                    text = "Registro Fotográfico da Lesão",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(bottom = 4.dp)
+                                )
+                            }
                             
                             val photoLauncher = rememberLauncherForActivityResult(
                                 contract = ActivityResultContracts.GetContent()
@@ -4235,11 +4884,12 @@ fun AdmissionFormScreen(
                                 }
                             }
                             
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                            if (!record.recordType.contains("Encaminhamento")) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                 if (editingLesion.fotoUri != null) {
                                     if (editingLesion.fotoUri!!.startsWith("simulated_camera_wound_")) {
                                         Box(
@@ -4300,6 +4950,7 @@ fun AdmissionFormScreen(
                                         Text("Simular Foto Câmera", style = MaterialTheme.typography.labelSmall)
                                     }
                                 }
+                            }
                             }
                             
                             Spacer(modifier = Modifier.height(12.dp))
@@ -4403,6 +5054,9 @@ fun AdmissionFormScreen(
                                         Column(Modifier.weight(1.3f)) {
                                             Text(lesion.localizacao.ifBlank { "Sacra" }, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                             Text(lesion.tipoLesao.ifBlank { "LPP" }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            if (lesion.classificacaoJanetJensey.isNotBlank()) {
+                                                Text("📋 Janet-Jensey: ${lesion.classificacaoJanetJensey}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            }
                                             if (lesion.descricaoAudio.isNotBlank()) {
                                                 Text("🗣️ ${lesion.descricaoAudio}", style = MaterialTheme.typography.labelSmall, fontStyle = FontStyle.Italic, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                             }
@@ -4496,6 +5150,63 @@ fun AdmissionFormScreen(
                 }
             }
 
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Card 7: Condutas de Enfermagem
+            FormSectionCard(
+                title = "7. Condutas de Enfermagem",
+                sectionIndex = 7,
+                expandedIndex = expandedSection,
+                onHeaderClick = { expandedSection = if (expandedSection == 7) null else 7 }
+            ) {
+                Column(modifier = Modifier.padding(4.dp)) {
+                    Text(
+                        text = "Condutas e Encaminhamentos",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                    
+                    FormTextField(
+                        value = record.condutas,
+                        onValueChange = { new -> onUpdateRecord { it.copy(condutas = new) } },
+                        label = "Condutas",
+                        placeholder = "Descreva as condutas tomadas ou clique no microfone para falar...",
+                        singleLine = false,
+                        showMic = true,
+                        testTag = "condutas_input"
+                    )
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Text(
+                        text = "Texto Pronto / Sugestão:",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    Button(
+                        onClick = {
+                            val textoPronto = "Realizado escalas de Braden, Fugulin e de Morse. Realizado banho com clorexidina degermante, esvaziamento da bexiga, retirada de adornos, peças íntimas e próteses. Anexado exames. Encaminhado paciente para o centro cirúrgico."
+                            onUpdateRecord { it.copy(condutas = textoPronto) }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ),
+                        modifier = Modifier.testTag("condutas_texto_pronto_button")
+                    ) {
+                        Icon(imageVector = Icons.Default.Assignment, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Texto Padrão Centro Cirúrgico", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
 
             // Action Buttons
@@ -4509,7 +5220,14 @@ fun AdmissionFormScreen(
             ) {
                 Icon(Icons.Default.Check, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Gerar Relatório de Admissão", fontWeight = FontWeight.Bold)
+                Text(
+                    text = when {
+                        record.recordType == "Evolução" -> "Gerar Relatório de Evolução"
+                        record.recordType.contains("Encaminhamento") -> "Gerar Relatório de Encaminhamento"
+                        else -> "Gerar Relatório de Admissão"
+                    },
+                    fontWeight = FontWeight.Bold
+                )
             }
 
             Spacer(modifier = Modifier.height(48.dp))
@@ -4609,7 +5327,7 @@ fun ReportPreviewScreen(
                         shape = RoundedCornerShape(16.dp)
                     ),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isDarkTheme) Color(0xFF131B30).copy(alpha = 0.55f) else Color(0xFFEEF3FE).copy(alpha = 0.85f)
+                    containerColor = if (isDarkTheme) Color(0xFF0F323F).copy(alpha = 0.55f) else Color(0xFFFFF0D4).copy(alpha = 0.85f)
                 )
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
@@ -4688,16 +5406,16 @@ fun ReportPreviewScreen(
                 }
             }
 
-            val isDarkRpt = MaterialTheme.colorScheme.primary == Color(0xFFA80359)
+            val isDarkRpt = MaterialTheme.colorScheme.primary == Color(0xFFADC7DB)
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
                 colors = CardDefaults.cardColors(
                     containerColor = if (isDarkRpt) {
-                        Color(0xFF101B2B).copy(alpha = 0.55f)
+                        Color(0xFF0F323F).copy(alpha = 0.55f)
                     } else {
-                        Color.White.copy(alpha = 0.85f)
+                        Color(0xFFFFF9EE).copy(alpha = 0.85f)
                     }
                 ),
                 border = BorderStroke(
@@ -4860,15 +5578,17 @@ fun BrandedAppLogo(modifier: Modifier = Modifier) {
     ) {
         Box(
             modifier = Modifier
-                .size(130.dp)
+                .size(135.dp)
                 .border(
                     border = BorderStroke(
-                        width = 4.dp,
-                        brush = Brush.radialGradient(
+                        width = 6.dp,
+                        brush = Brush.sweepGradient(
                             colors = listOf(
-                                Color(0xFFFFD700), // Pure sparkling Gold
-                                Color(0xFFC5A029), // Deep Amber Gold
-                                Color(0xFFFFD700)
+                                Color(0xFFE2E2E2), // Bright Silver Metallic
+                                Color(0xFF999999), // Metallic Silver Shadow
+                                Color(0xFFFFFFFF), // High-gloss Platinum highlight
+                                Color(0xFF999999), 
+                                Color(0xFFE2E2E2)
                             )
                         )
                     ),
@@ -4878,144 +5598,145 @@ fun BrandedAppLogo(modifier: Modifier = Modifier) {
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color(0xFF09141D), // Dark Clinical Navy
-                            Color(0xFF0C1920)  // Deep Midnight Teal
+                            Color(0xFF032233), // Deep Midnight Teal
+                            Color(0xFF0D3B54)  // Rich Sapphire Teal Blue
                         )
                     )
                 ),
             contentAlignment = Alignment.Center
         ) {
-            // Draw schematic bio-circuit lines in background
-            androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+            // Draw the white line-art clipboard and pen from the attached logo using canvas
+            androidx.compose.foundation.Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp)
+            ) {
                 val w = size.width
                 val h = size.height
-                
-                // Outer subtle scanner arc
-                drawArc(
-                    color = Color(0xFF00ADB5).copy(alpha = 0.15f),
-                    startAngle = 0f,
-                    sweepAngle = 270f,
-                    useCenter = false,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
+                val strokeWidth = w * 0.045f
+                val strokeStyle = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = strokeWidth,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                    join = androidx.compose.ui.graphics.StrokeJoin.Round
                 )
-                // Diagonal telemetry dash
+
+                // CLIPBOARD OUTLINE
+                // Left = 12% of w, Width = 52% of w, Top = 22% of h, Height = 64% of h
+                val clipL = w * 0.12f
+                val clipT = h * 0.22f
+                val clipW = w * 0.52f
+                val clipH = h * 0.64f
+                drawRoundRect(
+                    color = Color.White,
+                    topLeft = Offset(clipL, clipT),
+                    size = Size(clipW, clipH),
+                    cornerRadius = CornerRadius(w * 0.06f),
+                    style = strokeStyle
+                )
+
+                // CLIPBOARD TOP CLIP (Clip holder)
+                val clipPath = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(clipL + clipW * 0.18f, clipT)
+                    lineTo(clipL + clipW * 0.18f, clipT - h * 0.10f)
+                    lineTo(clipL + clipW * 0.32f, clipT - h * 0.14f)
+                    lineTo(clipL + clipW * 0.68f, clipT - h * 0.14f)
+                    lineTo(clipL + clipW * 0.82f, clipT - h * 0.10f)
+                    lineTo(clipL + clipW * 0.82f, clipT)
+                }
+                drawPath(path = clipPath, color = Color.White, style = strokeStyle)
+
+                // MEDICAL CROSS
+                val crossCX = clipL + clipW * 0.28f
+                val crossCY = clipT + clipH * 0.24f
+                val crossSize = clipW * 0.26f
+                // Horizontal bar
                 drawLine(
-                    color = Color(0xFFFF5722).copy(alpha = 0.1f),
-                    start = androidx.compose.ui.geometry.Offset(w * 0.1f, h * 0.1f),
-                    end = androidx.compose.ui.geometry.Offset(w * 0.9f, h * 0.9f),
-                    strokeWidth = 2f
+                    color = Color.White,
+                    start = Offset(crossCX - crossSize/2, crossCY),
+                    end = Offset(crossCX + crossSize/2, crossCY),
+                    strokeWidth = strokeWidth,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round
                 )
-            }
+                // Vertical bar
+                drawLine(
+                    color = Color.White,
+                    start = Offset(crossCX, crossCY - crossSize/2),
+                    end = Offset(crossCX, crossCY + crossSize/2),
+                    strokeWidth = strokeWidth,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round
+                )
 
-            // Central Branded Layout Elements: Clipboard & Laser Diagnostics
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(10.dp)
-            ) {
-                // Interactive clinical tablet
-                Box(
-                    modifier = Modifier
-                        .size(width = 50.dp, height = 70.dp)
-                        .background(
-                            color = Color(0xFF102A38),
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                        .border(
-                            border = BorderStroke(
-                                1.5.dp,
-                                Brush.linearGradient(
-                                    colors = listOf(Color(0xFF00F5FF), Color(0xFF008B8B))
-                                )
-                            ),
-                            shape = RoundedCornerShape(8.dp)
-                        ),
-                    contentAlignment = Alignment.TopCenter
-                ) {
-                    // Clipboard metallic head
-                    Box(
-                        modifier = Modifier
-                            .padding(top = 2.dp)
-                            .size(width = 24.dp, height = 6.dp)
-                            .background(Color(0xFF335566), RoundedCornerShape(2.dp))
-                    )
+                // THREE LINES NEXT TO THE CROSS
+                val lineStartX = clipL + clipW * 0.52f
+                val lineEndX = clipL + clipW * 0.85f
+                val lineY1 = clipT + clipH * 0.15f
+                val lineY2 = clipT + clipH * 0.24f
+                val lineY3 = clipT + clipH * 0.33f
+                drawLine(color = Color.White, start = Offset(lineStartX, lineY1), end = Offset(lineEndX, lineY1), strokeWidth = strokeWidth, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(color = Color.White, start = Offset(lineStartX, lineY2), end = Offset(lineEndX, lineY2), strokeWidth = strokeWidth, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(color = Color.White, start = Offset(lineStartX, lineY3), end = Offset(lineEndX - clipW * 0.10f, lineY3), strokeWidth = strokeWidth, cap = androidx.compose.ui.graphics.StrokeCap.Round)
 
-                    // Inner vital data and red cross
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(top = 14.dp, start = 4.dp, end = 4.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        // Radiant Red Cross
-                        Box(
-                            modifier = Modifier.size(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(modifier = Modifier.size(width = 12.dp, height = 4.dp).background(Color(0xFFFF5252), RoundedCornerShape(1.dp)))
-                            Box(modifier = Modifier.size(width = 4.dp, height = 12.dp).background(Color(0xFFFF5252), RoundedCornerShape(1.dp)))
-                        }
+                // CHECKBOXES AND TWO LOWER LINES
+                val boxSize = clipW * 0.18f
+                val boxX = clipL + clipW * 0.15f
+                val boxY1 = clipT + clipH * 0.48f
+                val boxY2 = clipT + clipH * 0.68f
+                drawRoundRect(
+                    color = Color.White,
+                    topLeft = Offset(boxX, boxY1),
+                    size = Size(boxSize, boxSize),
+                    cornerRadius = CornerRadius(w * 0.02f),
+                    style = strokeStyle
+                )
+                drawRoundRect(
+                    color = Color.White,
+                    topLeft = Offset(boxX, boxY2),
+                    size = Size(boxSize, boxSize),
+                    cornerRadius = CornerRadius(w * 0.02f),
+                    style = strokeStyle
+                )
+                // Lines next to checkboxes
+                val checkLineStartX = clipL + clipW * 0.42f
+                val checkLineEndX = clipL + clipW * 0.85f
+                val checkLineY1 = boxY1 + boxSize/2
+                val checkLineY2 = boxY2 + boxSize/2
+                drawLine(color = Color.White, start = Offset(checkLineStartX, checkLineY1), end = Offset(checkLineEndX, checkLineY1), strokeWidth = strokeWidth, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(color = Color.White, start = Offset(checkLineStartX, checkLineY2), end = Offset(checkLineEndX, checkLineY2), strokeWidth = strokeWidth, cap = androidx.compose.ui.graphics.StrokeCap.Round)
 
-                        // Simulated cardiac trace
-                        androidx.compose.foundation.Canvas(modifier = Modifier.size(width = 32.dp, height = 10.dp)) {
-                            val path = androidx.compose.ui.graphics.Path()
-                            path.moveTo(0f, size.height / 2)
-                            path.lineTo(6f, size.height / 2)
-                            path.lineTo(10f, 2f)
-                            path.lineTo(13f, size.height - 2)
-                            path.lineTo(17f, size.height / 2)
-                            path.lineTo(32f, size.height / 2)
-                            drawPath(
-                                path = path,
-                                color = Color(0xFF00FFCC), // Neon cyan vital wave
-                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f)
-                            )
-                        }
-
-                        // Digital grid telemetry dots
-                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
-                            Box(modifier = Modifier.weight(1f).height(2.dp).background(Color(0xFF00F5FF).copy(alpha = 0.5f)))
-                            Box(modifier = Modifier.weight(0.7f).height(2.dp).background(Color(0xFF00F5FF).copy(alpha = 0.5f)))
-                        }
-                    }
+                // PEN OUTLINE
+                val penL = w * 0.76f
+                val penW = w * 0.11f
+                val penT = h * 0.28f
+                val penH = h * 0.46f
+                drawRoundRect(
+                    color = Color.White,
+                    topLeft = Offset(penL, penT),
+                    size = Size(penW, penH),
+                    cornerRadius = CornerRadius(w * 0.02f),
+                    style = strokeStyle
+                )
+                // Pen clip
+                val penClipPath = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(penL + penW, penT + penH * 0.08f)
+                    lineTo(penL + penW + w * 0.05f, penT + penH * 0.08f)
+                    lineTo(penL + penW + w * 0.05f, penT + penH * 0.32f)
+                    lineTo(penL + penW, penT + penH * 0.32f)
                 }
+                drawPath(path = penClipPath, color = Color.White, style = strokeStyle)
 
-                Spacer(modifier = Modifier.width(6.dp))
+                // Stripes near tip
+                val stripeY1 = penT + penH * 0.74f
+                val stripeY2 = penT + penH * 0.84f
+                drawLine(color = Color.White, start = Offset(penL, stripeY1), end = Offset(penL + penW, stripeY1), strokeWidth = strokeWidth)
+                drawLine(color = Color.White, start = Offset(penL, stripeY2), end = Offset(penL + penW, stripeY2), strokeWidth = strokeWidth)
 
-                // High-strength medical scanner probe
-                Box(
-                    modifier = Modifier
-                        .size(width = 12.dp, height = 62.dp)
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(Color(0xFFD4E157), Color(0xFF00838F))
-                            ),
-                            shape = RoundedCornerShape(3.dp)
-                        )
-                        .border(1.dp, Color(0xFFFF9800).copy(alpha = 0.5f), RoundedCornerShape(3.dp)),
-                    contentAlignment = Alignment.TopCenter
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.fillMaxHeight(),
-                        verticalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        // Top optical lens trigger
-                        Box(
-                            modifier = Modifier
-                                .padding(top = 4.dp)
-                                .size(6.dp)
-                                .background(Color(0xFFFFD700), androidx.compose.foundation.shape.CircleShape)
-                        )
-                        // Laser bio-pointer tip
-                        Box(
-                            modifier = Modifier
-                                .size(width = 4.dp, height = 4.dp)
-                                .background(Color(0xFFFF5252), RoundedCornerShape(bottomStart = 1.dp, bottomEnd = 1.dp))
-                        )
-                    }
+                // Pen tip pointing down
+                val tipPath = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(penL, penT + penH)
+                    lineTo(penL + penW / 2, penT + penH + h * 0.08f)
+                    lineTo(penL + penW, penT + penH)
                 }
+                drawPath(path = tipPath, color = Color.White, style = strokeStyle)
             }
         }
     }
@@ -5105,7 +5826,7 @@ fun LoginScreen(
                 .widthIn(max = 460.dp),
             shape = RoundedCornerShape(26.dp),
             colors = CardDefaults.cardColors(
-                containerColor = if (isDarkTheme) Color(0xFF0E1724).copy(alpha = 0.82f) else Color.White.copy(alpha = 0.92f)
+                containerColor = if (isDarkTheme) Color(0xFF0F323F).copy(alpha = 0.82f) else Color(0xFFFFF9EE).copy(alpha = 0.92f)
             ),
             border = BorderStroke(
                 width = 1.2.dp,
@@ -5277,7 +5998,7 @@ fun LoginScreen(
                         .testTag("google_login_button"),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = if (isDarkTheme) Color(0xFF131F33) else Color.White
+                        containerColor = if (isDarkTheme) Color(0xFF0F323F) else Color(0xFFFFF9EE)
                     ),
                     border = BorderStroke(
                         width = 1.dp,
@@ -5496,7 +6217,7 @@ fun RegisterScreen(
                 .widthIn(max = 460.dp),
             shape = RoundedCornerShape(26.dp),
             colors = CardDefaults.cardColors(
-                containerColor = if (isDarkTheme) Color(0xFF0E1724).copy(alpha = 0.82f) else Color.White.copy(alpha = 0.92f)
+                containerColor = if (isDarkTheme) Color(0xFF0F323F).copy(alpha = 0.82f) else Color(0xFFFFF9EE).copy(alpha = 0.92f)
             ),
             border = BorderStroke(
                 width = 1.2.dp,
@@ -5679,7 +6400,7 @@ fun ForgotPasswordScreen(
                 .widthIn(max = 460.dp),
             shape = RoundedCornerShape(26.dp),
             colors = CardDefaults.cardColors(
-                containerColor = if (isDarkTheme) Color(0xFF0E1724).copy(alpha = 0.82f) else Color.White.copy(alpha = 0.92f)
+                containerColor = if (isDarkTheme) Color(0xFF0F323F).copy(alpha = 0.82f) else Color(0xFFFFF9EE).copy(alpha = 0.92f)
             ),
             border = BorderStroke(
                 width = 1.2.dp,
